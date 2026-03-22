@@ -1,0 +1,1745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OmairMovies</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            crimson: { DEFAULT: '#e11d48', dark: '#be123c', light: '#f43f5e' },
+            surface: { 1: '#0a0a0a', 2: '#111113', 3: '#1a1a1f', 4: '#222228', 5: '#2a2a32' },
+            anime: { DEFAULT: '#8b5cf6', dark: '#7c3aed', light: '#a78bfa' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { scrollbar-width: thin; scrollbar-color: #333 transparent; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    body { background: #0a0a0a; overflow-x: hidden; }
+
+    .skeleton { background: linear-gradient(90deg, #1a1a1f 25%, #222228 50%, #1a1a1f 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeScale { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .fade-in { animation: fadeIn 0.4s ease-out; }
+    .fade-scale { animation: fadeScale 0.3s ease-out; }
+
+    .card { transition: transform 0.25s ease, box-shadow 0.25s ease; }
+    .card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+    .genre-chip { transition: all 0.2s ease; }
+    .genre-chip:hover { background: rgba(225, 29, 72, 0.15); border-color: #e11d48; color: #f43f5e; }
+    .genre-chip.active { background: #e11d48; border-color: #e11d48; color: white; }
+    .genre-chip.anime-active { background: #8b5cf6; border-color: #8b5cf6; color: white; }
+    .genre-chip.anime:hover { background: rgba(139,92,246,0.15); border-color: #8b5cf6; color: #a78bfa; }
+
+    .row-scroll { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
+    .row-scroll > * { scroll-snap-align: start; }
+    .progress-bar { transition: width 0.3s ease; }
+
+    .server-btn { transition: all 0.15s ease; }
+    .server-btn:hover { background: rgba(225,29,72,0.15); border-color: #e11d48; }
+    .server-btn.active { background: #e11d48; border-color: #e11d48; }
+    .server-btn.tried { opacity: 0.4; }
+    .server-btn.trying { border-color: #facc15; }
+    .server-btn.trying::after { content:''; width:8px; height:8px; border:2px solid #facc15; border-top-color:transparent; border-radius:50%; animation:spin 0.6s linear infinite; margin-left:4px; display:inline-block; }
+
+    .ep-btn.watched { border-left: 3px solid #e11d48; background: rgba(225,29,72,0.08); }
+    .hero-gradient { background: linear-gradient(to right, #0a0a0a 0%, rgba(10,10,10,0.85) 40%, rgba(10,10,10,0.4) 70%, transparent 100%); }
+    .hero-gradient-bottom { background: linear-gradient(to top, #0a0a0a 0%, transparent 100%); }
+
+    /* Block common ad overlay injections */
+    iframe + div[style*="z-index: 999"],
+    iframe + div[style*="z-index:999"],
+    iframe ~ div[id*="pop"],
+    iframe ~ div[id*="overlay"],
+    iframe ~ div[class*="pop"],
+    iframe ~ div[class*="overlay"],
+    div[id*="adb"], div[class*="adb"],
+    div[id*="ad-"], div[class*="ad-"] { display: none !important; }
+
+    #adShield { background: transparent; }
+
+    /* Anime lang toggle */
+    .lang-toggle { position: relative; display: inline-flex; background: #1a1a1f; border-radius: 10px; padding: 3px; border: 1px solid rgba(255,255,255,0.05); }
+    .lang-toggle button { position: relative; z-index: 1; padding: 6px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; transition: color 0.2s; color: #888; }
+    .lang-toggle button.active { color: white; }
+    .lang-slider { position: absolute; top: 3px; height: calc(100% - 6px); border-radius: 8px; transition: left 0.25s ease, width 0.25s ease; z-index: 0; }
+  </style>
+</head>
+<body class="font-sans text-white min-h-screen">
+
+  <!-- ═══════════════ LOCK SCREEN ═══════════════ -->
+  <div id="lockScreen" class="fixed inset-0 z-[100] bg-surface-1 flex items-center justify-center">
+    <div class="text-center fade-in">
+      <div class="mb-6">
+        <span class="text-3xl font-black"><span class="text-crimson">Omair</span><span class="text-white/90">Movies</span></span>
+      </div>
+      <div class="relative">
+        <input id="lockInput" type="password" placeholder="Enter password"
+          autofocus
+          class="w-64 bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm text-white text-center placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-crimson/50 transition tracking-widest" />
+      </div>
+      <p id="lockError" class="text-crimson text-xs mt-3 hidden">Wrong password</p>
+      <p class="text-gray-700 text-[10px] mt-6">Private access only</p>
+    </div>
+  </div>
+
+  <!-- ═══════════════ NAVBAR ═══════════════ -->
+  <nav id="navbar" class="fixed top-0 left-0 right-0 z-50 transition-all duration-300">
+    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-4">
+      <a href="#" onclick="navigate('home')" class="text-xl font-black tracking-tight flex-shrink-0 mr-2">
+        <span class="text-crimson">Omair</span><span class="text-white/90">Movies</span>
+      </a>
+      <div class="hidden sm:flex items-center gap-1 text-sm">
+        <button onclick="navigate('home')" class="nav-link px-3 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition" data-page="home">Home</button>
+        <button onclick="navigate('movies')" class="nav-link px-3 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition" data-page="movies">Movies</button>
+        <button onclick="navigate('series')" class="nav-link px-3 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition" data-page="series">Series</button>
+        <button onclick="navigate('anime')" class="nav-link px-3 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition" data-page="anime">
+          <span class="text-anime font-bold">Anime</span>
+        </button>
+        <button onclick="navigate('watchlist')" class="nav-link px-3 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition" data-page="watchlist">
+          <i class="fa-solid fa-bookmark mr-1"></i>My List
+        </button>
+      </div>
+      <!-- Mobile nav -->
+      <div class="flex sm:hidden items-center gap-1 text-xs">
+        <button onclick="navigate('home')" class="nav-link px-2 py-1 rounded text-gray-500" data-page="home"><i class="fa-solid fa-house"></i></button>
+        <button onclick="navigate('movies')" class="nav-link px-2 py-1 rounded text-gray-500" data-page="movies"><i class="fa-solid fa-film"></i></button>
+        <button onclick="navigate('series')" class="nav-link px-2 py-1 rounded text-gray-500" data-page="series"><i class="fa-solid fa-tv"></i></button>
+        <button onclick="navigate('anime')" class="nav-link px-2 py-1 rounded text-anime" data-page="anime"><i class="fa-solid fa-dragon"></i></button>
+        <button onclick="navigate('watchlist')" class="nav-link px-2 py-1 rounded text-gray-500" data-page="watchlist"><i class="fa-solid fa-bookmark"></i></button>
+      </div>
+      <!-- Search -->
+      <div class="relative flex-1 max-w-md ml-auto">
+        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-600 text-sm"></i>
+        <input id="searchInput" type="text" placeholder="Search movies, series & anime..."
+          class="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-crimson/50 focus:border-crimson/50 transition" />
+        <div id="searchDropdown" class="absolute top-full left-0 right-0 mt-2 bg-surface-3 border border-white/10 rounded-xl overflow-hidden shadow-2xl hidden max-h-[400px] overflow-y-auto z-50"></div>
+      </div>
+      <!-- Sync / Settings -->
+      <div class="relative flex-shrink-0">
+        <button onclick="toggleSyncPanel()" class="text-gray-500 hover:text-white transition p-2" title="Sync & Settings">
+          <i class="fa-solid fa-cloud text-sm"></i>
+          <span id="syncDot" class="absolute top-1 right-1 w-2 h-2 rounded-full bg-green-500 hidden"></span>
+        </button>
+        <div id="syncPanel" class="absolute top-full right-0 mt-2 bg-surface-3 border border-white/10 rounded-xl shadow-2xl hidden w-72 p-4 z-50">
+          <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3"><i class="fa-solid fa-cloud mr-1"></i> Cross-Device Sync</h4>
+          <p class="text-[11px] text-gray-500 mb-3">Your data syncs automatically. To access on another device, enter this ID:</p>
+          <div class="flex gap-2 mb-3">
+            <input id="userIdInput" type="text" readonly class="flex-1 bg-surface-4 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none" />
+            <button onclick="copyUserId()" class="bg-surface-4 hover:bg-surface-5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-400 hover:text-white transition">
+              <i class="fa-solid fa-copy"></i>
+            </button>
+          </div>
+          <div class="border-t border-white/5 pt-3 mt-1">
+            <p class="text-[11px] text-gray-500 mb-2">Link another device:</p>
+            <div class="flex gap-2">
+              <input id="linkIdInput" type="text" placeholder="Paste ID here..." class="flex-1 bg-surface-4 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-crimson/30" />
+              <button onclick="linkDevice()" class="bg-crimson hover:bg-crimson-dark rounded-lg px-3 py-1.5 text-xs font-medium transition">Link</button>
+            </div>
+          </div>
+          <div id="syncMsg" class="text-[10px] text-green-400 mt-2 hidden"></div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ═══════════════ MAIN APP ═══════════════ -->
+  <div id="app" class="pt-16"></div>
+
+  <!-- ═══════════════ PLAYER MODAL ═══════════════ -->
+  <div id="playerModal" class="fixed inset-0 z-[60] hidden">
+    <div class="absolute inset-0 bg-black/95" onclick="closePlayer()"></div>
+    <div class="relative w-full h-full flex flex-col fade-scale">
+      <div class="flex items-center justify-between px-4 sm:px-6 py-3 bg-surface-2/90 backdrop-blur-sm border-b border-white/5 flex-shrink-0">
+        <div class="flex items-center gap-3 min-w-0">
+          <button onclick="closePlayer()" class="text-gray-400 hover:text-white transition p-1"><i class="fa-solid fa-arrow-left"></i></button>
+          <div class="min-w-0">
+            <h3 id="playerTitle" class="font-semibold text-sm sm:text-base truncate"></h3>
+            <p id="playerMeta" class="text-xs text-gray-500 truncate"></p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="serverStatus" class="text-xs text-gray-500 hidden sm:block"></span>
+          <button onclick="closePlayer()" class="text-gray-400 hover:text-white transition p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+      </div>
+      <div class="px-4 sm:px-6 py-2 bg-surface-2/50 border-b border-white/5 flex items-center gap-2 overflow-x-auto flex-shrink-0">
+        <span class="text-[10px] text-gray-600 uppercase tracking-widest font-bold flex-shrink-0">Servers</span>
+        <div id="serverList" class="flex gap-1.5 flex-shrink-0"></div>
+      </div>
+      <div class="flex-1 relative bg-black">
+        <div id="playerLoader" class="absolute inset-0 flex flex-col items-center justify-center bg-surface-1 z-10">
+          <div class="w-10 h-10 border-2 border-surface-4 border-t-crimson rounded-full animate-spin mb-3"></div>
+          <p id="playerLoaderText" class="text-gray-500 text-sm">Connecting to server...</p>
+        </div>
+        <!-- Ad click shield: absorbs first 2 clicks (which trigger ads), then disappears -->
+        <div id="adShield" class="absolute inset-0 z-[8] cursor-pointer" style="display:none">
+          <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-sm rounded-full px-4 py-2 text-xs text-gray-300 flex items-center gap-2 pointer-events-none select-none">
+            <i class="fa-solid fa-shield-halved text-crimson"></i>
+            <span id="shieldText">Click to dismiss ad shield</span>
+          </div>
+        </div>
+        <iframe id="playerFrame" class="absolute inset-0 w-full h-full" frameborder="0" allowfullscreen
+          referrerpolicy="origin" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" src=""></iframe>
+      </div>
+      <div id="episodeBar" class="hidden bg-surface-2/90 backdrop-blur-sm border-t border-white/5 flex-shrink-0">
+        <div class="px-4 sm:px-6 py-2 flex items-center gap-3">
+          <select id="seasonSelect" class="bg-surface-4 border border-white/10 text-white text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-crimson"></select>
+          <div id="episodeList" class="flex gap-1.5 overflow-x-auto flex-1 py-1"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ DETAIL MODAL ═══════════════ -->
+  <div id="detailModal" class="fixed inset-0 z-[55] hidden overflow-y-auto">
+    <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="closeDetail()"></div>
+    <div class="relative max-w-4xl mx-auto my-8 sm:my-16 mx-4">
+      <div id="detailContent" class="bg-surface-2 rounded-2xl overflow-hidden shadow-2xl border border-white/5 fade-scale"></div>
+    </div>
+  </div>
+
+  <script>
+  // ══════════════════════════════════════════════════════════════════════
+  // CONFIG
+  // ══════════════════════════════════════════════════════════════════════
+  const API_KEY  = '699b8c71cf0dd6893a8aac2b0f57cbc9';
+  const API      = 'https://api.themoviedb.org/3';
+  const IMG      = 'https://image.tmdb.org/t/p';
+  const IMG_W500 = `${IMG}/w500`;
+  const IMG_OG   = `${IMG}/original`;
+
+  // ─── MOVIE/TV SERVERS ───────────────────────────────────────────────
+  const SERVERS = [
+    { name: 'Vidlink',   movie: id => `https://vidlink.pro/movie/${id}?autoplay=true`,   tv: (id,s,e) => `https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true` },
+    { name: 'VidSrc',    movie: id => `https://vidsrc.cc/v2/embed/movie/${id}`,          tv: (id,s,e) => `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}` },
+    { name: 'Embed',     movie: id => `https://embed.su/embed/movie/${id}`,              tv: (id,s,e) => `https://embed.su/embed/tv/${id}/${s}/${e}` },
+    { name: 'Auto',      movie: id => `https://player.autoembed.cc/embed/movie/${id}`,   tv: (id,s,e) => `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}` },
+    { name: 'Multi',     movie: id => `https://multiembed.mov/?video_id=${id}&tmdb=1`,   tv: (id,s,e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}` },
+    { name: '2Embed',    movie: id => `https://www.2embed.stream/embed/movie/${id}`,     tv: (id,s,e) => `https://www.2embed.stream/embed/tv/${id}/${s}/${e}` },
+    { name: 'MoviesAPI', movie: id => `https://moviesapi.club/movie/${id}`,              tv: (id,s,e) => `https://moviesapi.club/tv/${id}/${s}/${e}` },
+    { name: 'VidSrc2',   movie: id => `https://vidsrc.icu/embed/movie/${id}`,            tv: (id,s,e) => `https://vidsrc.icu/embed/tv/${id}/${s}/${e}` },
+  ];
+
+  // ─── ANIME SERVERS (English Dub — 1080p) ───────────────────────────
+  // These use MAL (MyAnimeList) IDs with explicit /dub path
+  const ANIME_SERVERS_EN = [
+    { name: 'VidSrc Anime',  fn: (mal, ep) => `https://vidsrc.cc/v2/embed/anime/${mal}/${ep}/dub` },
+    { name: 'VidLink Anime', fn: (mal, ep) => `https://vidlink.pro/anime/${mal}/${ep}/dub?fallback=true` },
+    { name: 'MovieSrc',      fn: (mal, ep) => `https://movie-src.xyz/v1/embed/anime/${mal}/${ep}/dub` },
+    { name: 'AutoEmbed',     fn: (mal, ep, slug) => `https://anime.autoembed.cc/embed/${slug}-episode-${ep}` },
+    { name: 'LetsEmbed',     fn: (mal, ep, slug, tmdb) => `https://letsembed.cc/embed/anime/?id=${tmdb}/1/${ep}` },
+    { name: 'TMDBApi',       fn: (mal, ep, slug, tmdb) => `https://www.tmdbapi.xyz/anime/${tmdb}-1-${ep}` },
+  ];
+
+  // ─── ANIME SERVERS (Russian Dub — 720p-1080p) ──────────────────────
+  // Kinobox = aggregator (Collaps, Vibix, Lumex, etc.) — no token needed
+  // Kodik = down since March 20 2026, kept as fallback
+  const ANIME_SERVERS_RU = [
+    { name: 'Kinobox',        fn: null, dynamic: true }, // Special: fetches player URLs via API
+    { name: 'Collaps',        fn: (mal, ep, slug, tmdb, kpId) => kpId ? `https://api.namy.ws/embed/kp/${kpId}` : null, needsKP: true },
+    { name: 'Vibix',          fn: (mal, ep, slug, tmdb, kpId) => kpId ? `https://675812196.videoframe2.com/embed-kp/${kpId}` : null, needsKP: true },
+    { name: 'Kodik',          fn: (mal, ep) => `https://kodik.info/find-player?shikimoriID=${mal}&episode=${ep}&translation_type=voice` },
+    { name: 'Kodik AniDUB',   fn: (mal, ep) => `https://kodik.info/find-player?shikimoriID=${mal}&episode=${ep}&only_translations=609,610&translation_type=voice` },
+    { name: 'AutoEmbed RU',   fn: (mal, ep, slug) => `https://anime.autoembed.cc/embed/${slug}-episode-${ep}?server=3` },
+    { name: 'LetsEmbed',      fn: (mal, ep, slug, tmdb) => `https://letsembed.cc/embed/anime/?id=${tmdb}/1/${ep}` },
+    { name: 'TMDBApi',        fn: (mal, ep, slug, tmdb) => `https://www.tmdbapi.xyz/anime/${tmdb}-1-${ep}` },
+    { name: 'VidSrc Sub',     fn: (mal, ep) => `https://vidsrc.cc/v2/embed/anime/${mal}/${ep}/sub` },
+  ];
+
+  // ─── KINOBOX + KINOPOISK HELPERS ──────────────────────────────────
+  // Kinobox.tv aggregates Russian players (Collaps, Vibix, Lumex, Alloha, Kodik)
+  // Can search by title — returns iframe URLs for all available players
+  let kinoboxCache = {};
+  let kinopoiskIdCache = {};
+
+  async function fetchKinoboxPlayers(title) {
+    const cacheKey = slugify(title);
+    if (kinoboxCache[cacheKey]) return kinoboxCache[cacheKey];
+    try {
+      const res = await fetch(`https://kinobox.tv/api/players/main?title=${encodeURIComponent(title)}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      // data is array of { source, iframeUrl, translation, quality }
+      const players = (Array.isArray(data) ? data : []).filter(p => p.iframeUrl);
+      kinoboxCache[cacheKey] = players;
+      // Try to extract Kinopoisk ID from any player URL
+      for (const p of players) {
+        const kpMatch = p.iframeUrl.match(/kp[_/]?(\d{5,})/i);
+        if (kpMatch) { kinopoiskIdCache[cacheKey] = kpMatch[1]; break; }
+      }
+      return players;
+    } catch { return []; }
+  }
+
+  function getKinopoiskId(title) {
+    return kinopoiskIdCache[slugify(title)] || null;
+  }
+
+  const ANIME_GENRES = [
+    {id:16,name:'Animation'},{id:10759,name:'Action'},{id:35,name:'Comedy'},{id:18,name:'Drama'},
+    {id:10765,name:'Sci-Fi & Fantasy'},{id:10749,name:'Romance'},{id:9648,name:'Mystery'},
+    {id:10751,name:'Family'},{id:80,name:'Crime'},{id:10768,name:'War'}
+  ];
+
+  const GENRES_MOVIE = [
+    {id:28,name:'Action'},{id:12,name:'Adventure'},{id:16,name:'Animation'},{id:35,name:'Comedy'},
+    {id:80,name:'Crime'},{id:99,name:'Documentary'},{id:18,name:'Drama'},{id:10751,name:'Family'},
+    {id:14,name:'Fantasy'},{id:36,name:'History'},{id:27,name:'Horror'},{id:10402,name:'Music'},
+    {id:9648,name:'Mystery'},{id:10749,name:'Romance'},{id:878,name:'Sci-Fi'},{id:53,name:'Thriller'},
+    {id:10752,name:'War'},{id:37,name:'Western'}
+  ];
+  const GENRES_TV = [
+    {id:10759,name:'Action'},{id:16,name:'Animation'},{id:35,name:'Comedy'},{id:80,name:'Crime'},
+    {id:99,name:'Documentary'},{id:18,name:'Drama'},{id:10751,name:'Family'},{id:10762,name:'Kids'},
+    {id:9648,name:'Mystery'},{id:10764,name:'Reality'},{id:10765,name:'Sci-Fi'},{id:10766,name:'Soap'},
+    {id:10768,name:'War'}
+  ];
+
+  // ══════════════════════════════════════════════════════════════════════
+  // USER ID (persists across sessions, used for server-side sync)
+  // ══════════════════════════════════════════════════════════════════════
+  function getUserId() {
+    let id = localStorage.getItem('omair_user_id');
+    if (!id) {
+      id = 'u_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem('omair_user_id', id);
+    }
+    return id;
+  }
+  const USER_ID = getUserId();
+
+  // ══════════════════════════════════════════════════════════════════════
+  // STORAGE (localStorage + server sync)
+  // ══════════════════════════════════════════════════════════════════════
+  const storage = {
+    get(key, fallback = null) { try { const v = localStorage.getItem(`omair_${key}`); return v ? JSON.parse(v) : fallback; } catch { return fallback; } },
+    set(key, val) { localStorage.setItem(`omair_${key}`, JSON.stringify(val)); }
+  };
+
+  // ─── Server sync (fire-and-forget for writes, blocking for initial load) ──
+  const API_BASE = window.location.origin;
+  let serverSynced = false;
+
+  async function syncToServer(endpoint, body) {
+    try {
+      await fetch(`${API_BASE}/api/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-User-Id': USER_ID },
+        body: JSON.stringify(body),
+      });
+    } catch {} // Silent fail — localStorage is the fallback
+  }
+
+  async function loadFromServer() {
+    try {
+      const res = await fetch(`${API_BASE}/api/sync`, {
+        headers: { 'X-User-Id': USER_ID }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      // Merge server data into localStorage (server wins for newer entries)
+      if (data.history) {
+        const local = storage.get('history', {});
+        Object.entries(data.history).forEach(([k, v]) => {
+          if (!local[k] || (v.updated && v.updated > (local[k].updated || 0))) local[k] = v;
+        });
+        storage.set('history', local);
+      }
+      if (data.watchlist) {
+        const local = storage.get('watchlist', {});
+        Object.entries(data.watchlist).forEach(([k, v]) => {
+          if (!local[k]) local[k] = v;
+        });
+        storage.set('watchlist', local);
+      }
+      if (data.episodes) {
+        Object.entries(data.episodes).forEach(([seriesId, eps]) => {
+          const local = storage.get(`eps_${seriesId}`, {});
+          Object.assign(local, eps);
+          storage.set(`eps_${seriesId}`, local);
+        });
+      }
+      if (data.lastPage) storage.set('lastPage', data.lastPage);
+      serverSynced = true;
+    } catch {} // Offline — use localStorage only
+  }
+
+  // Full sync push (debounced)
+  let syncTimer;
+  function pushFullSync() {
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      const history = storage.get('history', {});
+      const watchlist = storage.get('watchlist', {});
+      // Collect all episode data
+      const episodes = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith('omair_eps_')) {
+          const seriesId = key.replace('omair_eps_', '');
+          try { episodes[seriesId] = JSON.parse(localStorage.getItem(key)); } catch {}
+        }
+      }
+      syncToServer('sync', { history, watchlist, episodes, lastPage: currentPage });
+    }, 2000);
+  }
+
+  // ─── Data access functions (same API, now with sync) ──────────────
+  function getHistory() { return storage.get('history', {}); }
+  function saveToHistory(id, data) {
+    const h = getHistory();
+    h[id] = { ...h[id], ...data, updated: Date.now() };
+    storage.set('history', h);
+    syncToServer('history', { key: id, data: h[id] });
+  }
+  function getHistoryEntry(id) { return getHistory()[id] || null; }
+
+  function getWatchlist() { return storage.get('watchlist', {}); }
+  function toggleWatchlist(id, data) {
+    const w = getWatchlist();
+    if (w[id]) delete w[id]; else w[id] = { ...data, added: Date.now() };
+    storage.set('watchlist', w);
+    syncToServer('watchlist', { key: id, data });
+    return !!w[id];
+  }
+  function isInWatchlist(id) { return !!getWatchlist()[id]; }
+
+  function getWatchedEps(seriesId) { return storage.get(`eps_${seriesId}`, {}); }
+  function markEpWatched(seriesId, s, e) {
+    const eps = getWatchedEps(seriesId);
+    eps[`${s}-${e}`] = true;
+    storage.set(`eps_${seriesId}`, eps);
+    syncToServer('episodes', { seriesId: String(seriesId), key: `${s}-${e}` });
+  }
+  function isEpWatched(seriesId, s, e) { return !!getWatchedEps(seriesId)[`${s}-${e}`]; }
+
+  // Anime language preference
+  function getAnimeLang() { return storage.get('anime_lang', 'en'); }
+  function setAnimeLang(lang) { storage.set('anime_lang', lang); pushFullSync(); }
+
+  // MAL ID cache
+  const malCache = {};
+  async function getMALId(tmdbId) {
+    if (malCache[tmdbId]) return malCache[tmdbId];
+    try {
+      const data = await tmdb(`/tv/${tmdbId}/external_ids`);
+      // TMDB doesn't have a direct MAL field, but we can use the TVDB → MAL mapping
+      // Store what we have — the anime servers also accept TMDB IDs as fallback
+      malCache[tmdbId] = { imdb: data.imdb_id, tvdb: data.tvdb_id };
+      return malCache[tmdbId];
+    } catch { return null; }
+  }
+
+  // Jikan API (MAL) to search by name and get MAL ID
+  async function searchMAL(title) {
+    try {
+      const res = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(title)}&limit=1&sfw=true`);
+      const data = await res.json();
+      if (data.data && data.data.length > 0) return data.data[0].mal_id;
+    } catch {}
+    return null;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // STATE
+  // ══════════════════════════════════════════════════════════════════════
+  let currentPage = 'home';
+  let currentGenre = null;
+  let animeLang = getAnimeLang();
+  let playerState = { type: null, id: null, season: 1, episode: 1, serverIndex: 0, autoTrying: false, triedServers: new Set(), isAnime: false, malId: null, slug: '' };
+
+  // ══════════════════════════════════════════════════════════════════════
+  // API
+  // ══════════════════════════════════════════════════════════════════════
+  async function tmdb(path, params = {}) {
+    const url = new URL(`${API}${path}`);
+    url.searchParams.set('api_key', API_KEY);
+    Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`API ${res.status}`);
+    return res.json();
+  }
+
+  function slugify(title) {
+    return (title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // COMPONENTS
+  // ══════════════════════════════════════════════════════════════════════
+  function skeletonCards(n = 12) {
+    return Array(n).fill(0).map(() => `
+      <div class="flex-shrink-0 w-[140px] sm:w-[160px]">
+        <div class="skeleton aspect-[2/3] rounded-xl"></div>
+        <div class="skeleton h-3 mt-2 rounded w-3/4"></div>
+        <div class="skeleton h-2.5 mt-1 rounded w-1/2"></div>
+      </div>`).join('');
+  }
+
+  function skeletonGrid(n = 18) {
+    return Array(n).fill(0).map(() => `
+      <div><div class="skeleton aspect-[2/3] rounded-xl"></div><div class="skeleton h-3 mt-2 rounded w-3/4"></div><div class="skeleton h-2.5 mt-1 rounded w-1/2"></div></div>`).join('');
+  }
+
+  function mediaCard(item, type = 'movie', isAnime = false) {
+    const title = item.title || item.name;
+    const year = (item.release_date || item.first_air_date || '').split('-')[0];
+    const rating = item.vote_average ? item.vote_average.toFixed(1) : '';
+    const poster = item.poster_path ? `${IMG_W500}${item.poster_path}` : '';
+    const storageType = isAnime ? 'anime' : type;
+    const histEntry = getHistoryEntry(`${storageType}_${item.id}`);
+    const accent = isAnime ? 'anime' : 'crimson';
+    const detailType = isAnime ? 'tv' : type;
+
+    return `
+      <div class="card cursor-pointer group" onclick="${isAnime ? `showAnimeDetail(${item.id})` : `showDetail(${item.id}, '${type}')`}">
+        <div class="relative aspect-[2/3] rounded-xl overflow-hidden bg-surface-3">
+          ${poster ? `<img src="${poster}" alt="${title}" class="w-full h-full object-cover" loading="lazy" />` : `<div class="w-full h-full flex items-center justify-center"><i class="fa-solid fa-film text-3xl text-gray-700"></i></div>`}
+          <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+            <div class="bg-${accent}/90 rounded-full w-12 h-12 flex items-center justify-center shadow-lg transform scale-75 group-hover:scale-100 transition-transform">
+              <i class="fa-solid fa-play text-sm ml-0.5"></i>
+            </div>
+          </div>
+          ${rating ? `<div class="absolute top-2 right-2 bg-black/70 backdrop-blur-sm rounded-md px-1.5 py-0.5 text-[10px] font-semibold flex items-center gap-1">
+            <i class="fa-solid fa-star text-yellow-400" style="font-size:8px"></i>${rating}
+          </div>` : ''}
+          ${isAnime ? `<div class="absolute top-2 left-2 bg-anime/80 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider">Anime</div>` : ''}
+          ${histEntry && histEntry.episode ? `<div class="absolute bottom-2 left-2 bg-${accent}/80 rounded-md px-1.5 py-0.5 text-[10px] font-semibold">EP ${histEntry.episode}</div>` : ''}
+        </div>
+        <p class="text-xs font-medium mt-2 truncate text-gray-200 group-hover:text-white transition">${title}</p>
+        <p class="text-[10px] text-gray-600">${year}${isAnime ? ' · Anime' : type === 'tv' ? ' · Series' : ''}</p>
+      </div>`;
+  }
+
+  function contentRow(title, items, type = 'movie', icon = '', isAnime = false) {
+    if (!items || items.length === 0) return '';
+    return `
+      <div class="mb-8 fade-in">
+        <div class="flex items-center gap-2.5 mb-3 px-1">
+          ${icon ? `<i class="${icon} ${isAnime ? 'text-anime' : 'text-crimson'} text-sm"></i>` : ''}
+          <h3 class="text-base font-bold text-white/90">${title}</h3>
+          <div class="h-px flex-1 bg-white/5"></div>
+        </div>
+        <div class="flex gap-3 overflow-x-auto row-scroll pb-2 -mx-1 px-1">
+          ${items.map(item => `<div class="flex-shrink-0 w-[140px] sm:w-[160px]">${mediaCard(item, type, isAnime)}</div>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  function contentGrid(items, type = 'movie', isAnime = false) {
+    return `<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+      ${items.map(item => mediaCard(item, type, isAnime)).join('')}
+    </div>`;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // PAGES
+  // ══════════════════════════════════════════════════════════════════════
+  async function renderHome() {
+    const app = document.getElementById('app');
+    app.innerHTML = `<div id="heroContainer"></div><div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pb-16" id="homeRows">
+      <div class="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 row-scroll">${skeletonCards(8)}</div></div>`;
+
+    try {
+      const trending = await tmdb('/trending/all/day');
+      const hero = trending.results[Math.floor(Math.random() * Math.min(5, trending.results.length))];
+      renderHero(hero);
+    } catch {}
+
+    const rows = document.getElementById('homeRows');
+    rows.innerHTML = '';
+
+    const [trendMovies, trendTV, popular, topRated, upcoming, airingToday, trendAnime] = await Promise.allSettled([
+      tmdb('/trending/movie/week'),
+      tmdb('/trending/tv/week'),
+      tmdb('/movie/popular'),
+      tmdb('/movie/top_rated'),
+      tmdb('/movie/upcoming'),
+      tmdb('/tv/airing_today'),
+      tmdb('/discover/tv', { with_genres: 16, with_original_language: 'ja', sort_by: 'popularity.desc' }),
+    ]);
+
+    // Continue watching
+    const history = getHistory();
+    const continueItems = Object.entries(history).sort((a,b) => b[1].updated - a[1].updated).slice(0, 20).map(([key, val]) => ({ ...val, _key: key }));
+
+    if (continueItems.length > 0) {
+      rows.innerHTML += `
+        <div class="mb-8 fade-in">
+          <div class="flex items-center gap-2.5 mb-3 px-1">
+            <i class="fa-solid fa-clock-rotate-left text-crimson text-sm"></i>
+            <h3 class="text-base font-bold text-white/90">Continue Watching</h3>
+            <div class="h-px flex-1 bg-white/5"></div>
+          </div>
+          <div class="flex gap-3 overflow-x-auto row-scroll pb-2 -mx-1 px-1">
+            ${continueItems.map(item => {
+              const isAnime = item._key.startsWith('anime');
+              const t = isAnime ? 'anime' : item._key.startsWith('tv') ? 'tv' : 'movie';
+              const id = item.tmdbId || item._key.split('_').slice(1).join('_');
+              return `<div class="flex-shrink-0 w-[140px] sm:w-[160px]">
+                <div class="card cursor-pointer group" onclick="${isAnime ? `showAnimeDetail(${id})` : `showDetail(${id}, '${t}')`}">
+                  <div class="relative aspect-[2/3] rounded-xl overflow-hidden bg-surface-3">
+                    ${item.poster ? `<img src="${item.poster}" class="w-full h-full object-cover" loading="lazy" />` : `<div class="w-full h-full flex items-center justify-center"><i class="fa-solid fa-film text-3xl text-gray-700"></i></div>`}
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <div class="bg-${isAnime ? 'anime' : 'crimson'}/90 rounded-full w-12 h-12 flex items-center justify-center"><i class="fa-solid fa-play text-sm ml-0.5"></i></div>
+                    </div>
+                    ${item.episode ? `<div class="absolute bottom-2 left-2 bg-${isAnime ? 'anime' : 'crimson'}/80 rounded-md px-1.5 py-0.5 text-[10px] font-semibold">EP ${item.episode}</div>` : ''}
+                    ${isAnime ? `<div class="absolute top-2 left-2 bg-anime/80 rounded-md px-1.5 py-0.5 text-[9px] font-bold">ANIME</div>` : ''}
+                  </div>
+                  <p class="text-xs font-medium mt-2 truncate text-gray-200">${item.title || 'Unknown'}</p>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+    }
+
+    if (trendMovies.status === 'fulfilled') rows.innerHTML += contentRow('Trending Movies', trendMovies.value.results, 'movie', 'fa-solid fa-fire');
+    if (trendTV.status === 'fulfilled') rows.innerHTML += contentRow('Trending Series', trendTV.value.results, 'tv', 'fa-solid fa-tv');
+    if (trendAnime.status === 'fulfilled') rows.innerHTML += contentRow('Trending Anime', trendAnime.value.results, 'tv', 'fa-solid fa-dragon', true);
+    if (popular.status === 'fulfilled') rows.innerHTML += contentRow('Popular Movies', popular.value.results, 'movie', 'fa-solid fa-chart-line');
+    if (upcoming.status === 'fulfilled') rows.innerHTML += contentRow('Upcoming', upcoming.value.results, 'movie', 'fa-solid fa-calendar');
+    if (topRated.status === 'fulfilled') rows.innerHTML += contentRow('Top Rated', topRated.value.results, 'movie', 'fa-solid fa-trophy');
+    if (airingToday.status === 'fulfilled') rows.innerHTML += contentRow('Airing Today', airingToday.value.results, 'tv', 'fa-solid fa-satellite-dish');
+  }
+
+  function renderHero(item) {
+    const type = item.media_type || (item.title ? 'movie' : 'tv');
+    const title = item.title || item.name;
+    const backdrop = item.backdrop_path ? `${IMG_OG}${item.backdrop_path}` : '';
+    const overview = (item.overview || '').slice(0, 200) + (item.overview && item.overview.length > 200 ? '...' : '');
+    const year = (item.release_date || item.first_air_date || '').split('-')[0];
+    const rating = item.vote_average ? item.vote_average.toFixed(1) : '';
+
+    document.getElementById('heroContainer').innerHTML = `
+      <div class="relative h-[50vh] sm:h-[60vh] lg:h-[70vh] overflow-hidden mb-8">
+        ${backdrop ? `<img src="${backdrop}" class="absolute inset-0 w-full h-full object-cover object-top" />` : ''}
+        <div class="absolute inset-0 hero-gradient"></div>
+        <div class="absolute bottom-0 left-0 right-0 h-32 hero-gradient-bottom"></div>
+        <div class="absolute inset-0 flex items-end">
+          <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pb-12 w-full">
+            <div class="max-w-lg fade-in">
+              <div class="flex items-center gap-2 mb-2">
+                ${rating ? `<span class="bg-yellow-500/20 text-yellow-400 text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-1"><i class="fa-solid fa-star" style="font-size:9px"></i>${rating}</span>` : ''}
+                ${year ? `<span class="text-gray-400 text-xs">${year}</span>` : ''}
+                <span class="text-gray-600 text-xs uppercase">${type}</span>
+              </div>
+              <h1 class="text-3xl sm:text-4xl lg:text-5xl font-black mb-3 leading-tight">${title}</h1>
+              <p class="text-sm text-gray-300 mb-4 leading-relaxed hidden sm:block">${overview}</p>
+              <div class="flex gap-3">
+                <button onclick="playFromDetail(${item.id}, '${type}')" class="bg-crimson hover:bg-crimson-dark text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition flex items-center gap-2">
+                  <i class="fa-solid fa-play text-xs"></i> Play
+                </button>
+                <button onclick="showDetail(${item.id}, '${type}')" class="bg-white/10 hover:bg-white/15 text-white font-medium px-5 py-2.5 rounded-xl text-sm transition flex items-center gap-2 backdrop-blur-sm">
+                  <i class="fa-solid fa-circle-info text-xs"></i> Details
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  async function renderBrowse(type = 'movie') {
+    const genres = type === 'movie' ? GENRES_MOVIE : GENRES_TV;
+    const app = document.getElementById('app');
+    app.innerHTML = `
+      <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-16">
+        <h2 class="text-2xl font-bold mb-4">${type === 'movie' ? 'Movies' : 'Series'}</h2>
+        <div class="flex gap-2 overflow-x-auto row-scroll pb-3 mb-6 -mx-1 px-1" id="genreChips">
+          <button onclick="filterGenre(null, '${type}')" class="genre-chip px-3 py-1.5 rounded-full border border-white/10 text-xs font-medium text-gray-400 flex-shrink-0 ${!currentGenre ? 'active' : ''}">All</button>
+          ${genres.map(g => `<button onclick="filterGenre(${g.id}, '${type}')" class="genre-chip px-3 py-1.5 rounded-full border border-white/10 text-xs font-medium text-gray-400 flex-shrink-0 ${currentGenre === g.id ? 'active' : ''}">${g.name}</button>`).join('')}
+        </div>
+        <div id="browseGrid">${skeletonGrid()}</div>
+      </div>`;
+
+    try {
+      const endpoint = type === 'movie' ? '/discover/movie' : '/discover/tv';
+      const params = { sort_by: 'popularity.desc' };
+      if (currentGenre) params.with_genres = currentGenre;
+      const data = await tmdb(endpoint, params);
+      document.getElementById('browseGrid').innerHTML = contentGrid(data.results || [], type);
+    } catch {
+      document.getElementById('browseGrid').innerHTML = '<p class="text-red-400 text-center py-8">Failed to load.</p>';
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // ANIME PAGE
+  // ══════════════════════════════════════════════════════════════════════
+  async function renderAnime() {
+    const app = document.getElementById('app');
+    const lang = animeLang;
+    const langLabel = lang === 'en' ? 'English Dub' : 'Русский Дубляж';
+
+    app.innerHTML = `
+      <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-16">
+        <!-- Header with lang toggle -->
+        <div class="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
+          <div class="flex items-center gap-3">
+            <i class="fa-solid fa-dragon text-anime text-xl"></i>
+            <h2 class="text-2xl font-bold">Dubbed Anime</h2>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="lang-toggle" id="langToggle">
+              <div class="lang-slider bg-anime" id="langSlider"></div>
+              <button onclick="switchAnimeLang('en')" class="${lang === 'en' ? 'active' : ''}" data-lang="en">
+                <span class="mr-1">🇬🇧</span> English
+              </button>
+              <button onclick="switchAnimeLang('ru')" class="${lang === 'ru' ? 'active' : ''}" data-lang="ru">
+                <span class="mr-1">🇷🇺</span> Русский
+              </button>
+            </div>
+            <span class="text-xs text-gray-500 hidden sm:block">1080p · ${langLabel}</span>
+          </div>
+        </div>
+
+        <!-- Genre chips -->
+        <div class="flex gap-2 overflow-x-auto row-scroll pb-3 mb-6 -mx-1 px-1" id="animeGenreChips">
+          <button onclick="filterAnimeGenre(null)" class="genre-chip anime px-3 py-1.5 rounded-full border border-white/10 text-xs font-medium text-gray-400 flex-shrink-0 ${!currentGenre ? 'anime-active' : ''}">All</button>
+          ${ANIME_GENRES.map(g => `<button onclick="filterAnimeGenre(${g.id})" class="genre-chip anime px-3 py-1.5 rounded-full border border-white/10 text-xs font-medium text-gray-400 flex-shrink-0 ${currentGenre === g.id ? 'anime-active' : ''}">${g.name}</button>`).join('')}
+        </div>
+
+        <!-- Anime rows (initial load) then grid -->
+        <div id="animeContent">${skeletonGrid()}</div>
+      </div>`;
+
+    // Position lang slider
+    requestAnimationFrame(updateLangSlider);
+
+    try {
+      const params = { with_genres: currentGenre || 16, with_original_language: 'ja', sort_by: 'popularity.desc' };
+      if (currentGenre && currentGenre !== 16) { params.with_genres = `16,${currentGenre}`; }
+
+      // If no genre filter, show rows; otherwise show grid
+      if (!currentGenre) {
+        const [popular, topRated, airing, recent] = await Promise.allSettled([
+          tmdb('/discover/tv', { with_genres: 16, with_original_language: 'ja', sort_by: 'popularity.desc' }),
+          tmdb('/discover/tv', { with_genres: 16, with_original_language: 'ja', sort_by: 'vote_average.desc', 'vote_count.gte': 200 }),
+          tmdb('/discover/tv', { with_genres: 16, with_original_language: 'ja', sort_by: 'first_air_date.desc', 'vote_count.gte': 10 }),
+          tmdb('/discover/tv', { with_genres: 16, with_original_language: 'ja', sort_by: 'first_air_date.desc', 'first_air_date.lte': new Date().toISOString().split('T')[0] }),
+        ]);
+
+        let html = '';
+        if (popular.status === 'fulfilled') html += contentRow('Most Popular', popular.value.results, 'tv', 'fa-solid fa-fire', true);
+        if (topRated.status === 'fulfilled') html += contentRow('Top Rated', topRated.value.results, 'tv', 'fa-solid fa-trophy', true);
+        if (recent.status === 'fulfilled') html += contentRow('Recently Released', recent.value.results, 'tv', 'fa-solid fa-sparkles', true);
+        if (airing.status === 'fulfilled') html += contentRow('New & Upcoming', airing.value.results, 'tv', 'fa-solid fa-calendar', true);
+        document.getElementById('animeContent').innerHTML = html || '<p class="text-gray-500 text-center py-8">No anime found.</p>';
+      } else {
+        const data = await tmdb('/discover/tv', params);
+        document.getElementById('animeContent').innerHTML = contentGrid(data.results || [], 'tv', true);
+      }
+    } catch {
+      document.getElementById('animeContent').innerHTML = '<p class="text-red-400 text-center py-8">Failed to load anime.</p>';
+    }
+  }
+
+  function updateLangSlider() {
+    const toggle = document.getElementById('langToggle');
+    const slider = document.getElementById('langSlider');
+    if (!toggle || !slider) return;
+    const btns = toggle.querySelectorAll('button');
+    const activeBtn = toggle.querySelector(`button[data-lang="${animeLang}"]`);
+    if (activeBtn) {
+      slider.style.left = activeBtn.offsetLeft + 'px';
+      slider.style.width = activeBtn.offsetWidth + 'px';
+    }
+  }
+
+  function switchAnimeLang(lang) {
+    animeLang = lang;
+    setAnimeLang(lang);
+    const toggle = document.getElementById('langToggle');
+    if (toggle) {
+      toggle.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+      updateLangSlider();
+    }
+    // If currently on anime page, re-render just the label
+    const label = document.querySelector('.lang-toggle + span');
+    if (label) label.textContent = `1080p · ${lang === 'en' ? 'English Dub' : 'Русский Дубляж'}`;
+  }
+
+  function filterAnimeGenre(genreId) {
+    currentGenre = genreId;
+    renderAnime();
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // ANIME DETAIL
+  // ══════════════════════════════════════════════════════════════════════
+  async function showAnimeDetail(tmdbId) {
+    const modal = document.getElementById('detailModal');
+    const content = document.getElementById('detailContent');
+    modal.classList.remove('hidden');
+    content.innerHTML = `<div class="p-8 text-center"><div class="w-8 h-8 border-2 border-surface-4 border-t-anime rounded-full animate-spin mx-auto"></div></div>`;
+
+    try {
+      const data = await tmdb(`/tv/${tmdbId}`, { append_to_response: 'credits,similar' });
+      const title = data.name;
+      const year = (data.first_air_date || '').split('-')[0];
+      const rating = data.vote_average ? data.vote_average.toFixed(1) : '';
+      const backdrop = data.backdrop_path ? `${IMG_OG}${data.backdrop_path}` : '';
+      const poster = data.poster_path ? `${IMG_W500}${data.poster_path}` : '';
+      const inWatchlist = isInWatchlist(`anime_${tmdbId}`);
+      const seasons = (data.seasons || []).filter(s => s.season_number > 0);
+      const histEntry = getHistoryEntry(`anime_${tmdbId}`);
+      const resumeEp = histEntry?.episode || 1;
+      const langLabel = animeLang === 'en' ? '🇬🇧 English Dub' : '🇷🇺 Русский';
+
+      content.innerHTML = `
+        <div class="relative h-48 sm:h-64 overflow-hidden">
+          ${backdrop ? `<img src="${backdrop}" class="w-full h-full object-cover" />` : '<div class="w-full h-full bg-surface-3"></div>'}
+          <div class="absolute inset-0 bg-gradient-to-t from-surface-2 via-surface-2/60 to-transparent"></div>
+          <button onclick="closeDetail()" class="absolute top-3 right-3 bg-black/50 backdrop-blur-sm rounded-full w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white transition">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+          <div class="absolute top-3 left-3 bg-anime/90 rounded-lg px-2.5 py-1 text-xs font-bold flex items-center gap-1.5">
+            <i class="fa-solid fa-dragon"></i> Anime · ${langLabel}
+          </div>
+        </div>
+        <div class="px-5 sm:px-8 pb-8 -mt-16 relative">
+          <div class="flex gap-5">
+            <div class="w-28 sm:w-36 flex-shrink-0 -mt-8">
+              ${poster ? `<img src="${poster}" class="w-full rounded-xl shadow-2xl border-2 border-anime/30" />` : ''}
+            </div>
+            <div class="flex-1 min-w-0 pt-2">
+              <h2 class="text-xl sm:text-2xl font-bold mb-1">${title}</h2>
+              <div class="flex flex-wrap items-center gap-2 text-xs text-gray-400 mb-3">
+                ${year ? `<span>${year}</span>` : ''}
+                ${data.number_of_seasons ? `<span>· ${data.number_of_seasons} Season${data.number_of_seasons > 1 ? 's' : ''}</span>` : ''}
+                ${rating ? `<span class="text-yellow-400 flex items-center gap-1"><i class="fa-solid fa-star" style="font-size:9px"></i>${rating}</span>` : ''}
+              </div>
+              <div class="flex flex-wrap gap-2 mb-4">
+                <button onclick="playAnime(${tmdbId}, '${title.replace(/'/g, "\\'")}')" class="bg-anime hover:bg-anime-dark text-white font-semibold px-5 py-2 rounded-lg text-sm transition flex items-center gap-2">
+                  <i class="fa-solid fa-play text-xs"></i>
+                  ${histEntry ? `Resume EP ${resumeEp}` : 'Play'}
+                </button>
+                <button onclick="toggleWL(${tmdbId}, 'anime', '${title.replace(/'/g, "\\'")}', '${poster}')" id="wlBtn"
+                  class="bg-white/10 hover:bg-white/15 text-white px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">
+                  <i class="fa-solid ${inWatchlist ? 'fa-bookmark text-anime' : 'fa-plus'}"></i>
+                  ${inWatchlist ? 'In List' : 'Add to List'}
+                </button>
+              </div>
+            </div>
+          </div>
+          ${(data.genres||[]).length ? `<div class="flex flex-wrap gap-1.5 mt-4 mb-3">${data.genres.map(g => `<span class="bg-anime/10 border border-anime/20 rounded-full px-2.5 py-0.5 text-[10px] text-anime-light">${g.name}</span>`).join('')}</div>` : ''}
+          <p class="text-sm text-gray-400 leading-relaxed mb-6">${data.overview || ''}</p>
+
+          ${seasons.length > 0 ? `
+            <div class="mb-6">
+              <h4 class="text-sm font-semibold mb-3 text-white/80">Episodes</h4>
+              <div class="flex gap-2 overflow-x-auto row-scroll pb-2 mb-3" id="detailSeasons">
+                ${seasons.map(s => `
+                  <button onclick="loadAnimeSeasonEps(${tmdbId}, ${s.season_number}, '${title.replace(/'/g, "\\'")}')" class="detail-season-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-white/10 text-gray-400 hover:border-anime hover:text-anime transition flex-shrink-0" data-s="${s.season_number}">
+                    S${s.season_number} <span class="text-gray-600">(${s.episode_count})</span>
+                  </button>`).join('')}
+              </div>
+              <div id="detailEpisodes" class="space-y-1"></div>
+            </div>` : ''}
+
+          ${data.similar?.results?.length > 0 ? `
+            <div>
+              <h4 class="text-sm font-semibold mb-3 text-white/80">Similar Anime</h4>
+              <div class="flex gap-3 overflow-x-auto row-scroll pb-2">
+                ${data.similar.results.filter(s => s.genre_ids?.includes(16)).slice(0,10).map(item => `<div class="flex-shrink-0 w-[120px]">${mediaCard(item, 'tv', true)}</div>`).join('')}
+              </div>
+            </div>` : ''}
+        </div>`;
+
+      if (seasons.length > 0) {
+        loadAnimeSeasonEps(tmdbId, seasons[0].season_number, title);
+      }
+    } catch {
+      content.innerHTML = `<div class="p-8 text-center text-red-400">Failed to load anime details.</div>`;
+    }
+  }
+
+  async function loadAnimeSeasonEps(tmdbId, seasonNum, animeTitle) {
+    document.querySelectorAll('.detail-season-btn').forEach(btn => {
+      const active = parseInt(btn.dataset.s) === seasonNum;
+      btn.classList.toggle('border-anime', active);
+      btn.classList.toggle('text-anime', active);
+    });
+
+    const container = document.getElementById('detailEpisodes');
+    container.innerHTML = '<div class="skeleton h-12 rounded-lg"></div><div class="skeleton h-12 rounded-lg"></div>';
+
+    try {
+      const data = await tmdb(`/tv/${tmdbId}/season/${seasonNum}`);
+      const eps = data.episodes || [];
+
+      container.innerHTML = eps.map(ep => {
+        const watched = isEpWatched(tmdbId, seasonNum, ep.episode_number);
+        return `
+          <div class="ep-btn flex items-center gap-3 p-3 rounded-lg bg-surface-3/50 hover:bg-surface-4 transition cursor-pointer group ${watched ? 'watched' : ''}"
+               onclick="playAnimeEp(${tmdbId}, ${seasonNum}, ${ep.episode_number}, '${animeTitle.replace(/'/g, "\\'")}')">
+            <div class="text-xs font-mono text-gray-600 w-6 text-center flex-shrink-0">${ep.episode_number}</div>
+            ${ep.still_path ? `<img src="${IMG_W500}${ep.still_path}" class="w-24 h-14 rounded object-cover flex-shrink-0 hidden sm:block" />` : ''}
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium truncate ${watched ? 'text-gray-400' : 'text-white/90'}">${ep.name}</p>
+              <p class="text-[10px] text-gray-600 truncate">${ep.overview || ''}</p>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              ${watched ? '<span class="text-[10px] text-anime font-medium">WATCHED</span>' : ''}
+              <div class="bg-white/5 group-hover:bg-anime/80 rounded-full w-8 h-8 flex items-center justify-center transition">
+                <i class="fa-solid fa-play text-[10px] ml-0.5"></i>
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+    } catch {
+      container.innerHTML = '<p class="text-red-400 text-sm text-center py-4">Failed to load episodes.</p>';
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // ANIME PLAYER
+  // ══════════════════════════════════════════════════════════════════════
+  async function playAnime(tmdbId, title) {
+    const hist = getHistoryEntry(`anime_${tmdbId}`);
+    const ep = hist?.episode || 1;
+    const season = hist?.season || 1;
+    openAnimePlayer(tmdbId, title, season, ep);
+  }
+
+  function playAnimeEp(tmdbId, season, episode, title) {
+    closeDetail();
+    openAnimePlayer(tmdbId, title, season, episode);
+  }
+
+  async function openAnimePlayer(tmdbId, title, season, episode) {
+    const slug = slugify(title);
+
+    const frame = document.getElementById('playerFrame');
+    const modal = document.getElementById('playerModal');
+    const loader = document.getElementById('playerLoader');
+    const episodeBar = document.getElementById('episodeBar');
+
+    frame.src = '';
+    loader.style.display = 'flex';
+    document.getElementById('playerLoaderText').textContent = 'Resolving anime IDs...';
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+
+    document.getElementById('playerTitle').textContent = title;
+    document.getElementById('playerMeta').textContent = `${animeLang === 'en' ? '🇬🇧 ENG' : '🇷🇺 RUS'} · Episode ${episode}`;
+
+    // Fetch MAL ID + Kinobox players in parallel
+    let malId = null;
+    let kinoboxPlayers = [];
+    const [malResult, kinoboxResult, posterResult] = await Promise.allSettled([
+      searchMAL(title),
+      animeLang === 'ru' ? fetchKinoboxPlayers(title) : Promise.resolve([]),
+      getPoster(tmdbId),
+    ]);
+    if (malResult.status === 'fulfilled') malId = malResult.value;
+    if (kinoboxResult.status === 'fulfilled') kinoboxPlayers = kinoboxResult.value;
+    const poster = posterResult.status === 'fulfilled' ? posterResult.value : '';
+
+    const kpId = getKinopoiskId(title);
+
+    playerState = {
+      type: 'tv', id: tmdbId, season, episode,
+      serverIndex: 0, autoTrying: true, triedServers: new Set(),
+      isAnime: true, malId: malId || tmdbId, slug, animeTitle: title,
+      kpId, kinoboxPlayers
+    };
+
+    saveToHistory(`anime_${tmdbId}`, { type: 'anime', tmdbId, title, poster, season, episode });
+    markEpWatched(tmdbId, season, episode);
+
+    // Load episode bar
+    episodeBar.classList.remove('hidden');
+    try {
+      const data = await tmdb(`/tv/${tmdbId}`);
+      const seasons = data.seasons || [];
+      await loadAnimePlayerEpisodes(tmdbId, seasons, season, episode, title);
+    } catch {}
+
+    // Build effective server list for Russian (merge Kinobox results)
+    const servers = buildAnimeServers();
+    renderAnimeServerList(servers);
+    autoTryAnimeServers(servers);
+  }
+
+  // Build the final server list, injecting Kinobox results for Russian
+  function buildAnimeServers() {
+    if (animeLang === 'en') return ANIME_SERVERS_EN;
+
+    const servers = [];
+    // First: inject Kinobox dynamic results as individual servers
+    if (playerState.kinoboxPlayers && playerState.kinoboxPlayers.length > 0) {
+      playerState.kinoboxPlayers.forEach(p => {
+        const label = p.source || 'Kinobox';
+        const qual = p.quality ? ` ${p.quality}` : '';
+        const voice = p.translation ? ` (${p.translation})` : '';
+        servers.push({
+          name: `${label}${qual}${voice}`.slice(0, 30),
+          fn: () => p.iframeUrl,
+          fromKinobox: true
+        });
+      });
+    }
+    // Then: add static servers from ANIME_SERVERS_RU (skip the Kinobox placeholder)
+    ANIME_SERVERS_RU.forEach(s => {
+      if (s.dynamic) return; // skip the Kinobox placeholder
+      servers.push(s);
+    });
+    return servers;
+  }
+
+  async function getPoster(tmdbId) {
+    try {
+      const data = await tmdb(`/tv/${tmdbId}`);
+      return data.poster_path ? `${IMG_W500}${data.poster_path}` : '';
+    } catch { return ''; }
+  }
+
+  async function loadAnimePlayerEpisodes(tmdbId, seasons, currentSeason, currentEp, title) {
+    const select = document.getElementById('seasonSelect');
+    select.innerHTML = seasons.filter(s => s.season_number > 0)
+      .map(s => `<option value="${s.season_number}" ${s.season_number === currentSeason ? 'selected' : ''}>Season ${s.season_number}</option>`)
+      .join('');
+    select.onchange = () => loadAnimePlayerEpList(tmdbId, parseInt(select.value), currentEp, title);
+    loadAnimePlayerEpList(tmdbId, currentSeason, currentEp, title);
+  }
+
+  async function loadAnimePlayerEpList(tmdbId, seasonNum, highlightEp, title) {
+    const list = document.getElementById('episodeList');
+    try {
+      const data = await tmdb(`/tv/${tmdbId}/season/${seasonNum}`);
+      list.innerHTML = (data.episodes || []).map(ep => {
+        const isCurrent = seasonNum === playerState.season && ep.episode_number === playerState.episode;
+        const watched = isEpWatched(tmdbId, seasonNum, ep.episode_number);
+        return `<button onclick="switchAnimeEp(${seasonNum}, ${ep.episode_number}, '${(title||playerState.animeTitle).replace(/'/g, "\\'")}')"
+          class="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition
+            ${isCurrent ? 'bg-anime border-anime text-white' : watched ? 'border-anime/30 text-anime/70 bg-anime/5' : 'border-white/10 text-gray-500 hover:border-white/20 hover:text-white'}">
+          E${ep.episode_number}
+        </button>`;
+      }).join('');
+    } catch {}
+  }
+
+  function switchAnimeEp(season, episode, title) {
+    playerState.season = season;
+    playerState.episode = episode;
+    playerState.serverIndex = 0;
+    playerState.autoTrying = true;
+    playerState.triedServers = new Set();
+    document.getElementById('playerMeta').textContent = `${animeLang === 'en' ? '🇬🇧 ENG' : '🇷🇺 RUS'} · Episode ${episode}`;
+
+    saveToHistory(`anime_${playerState.id}`, { season, episode });
+    markEpWatched(playerState.id, season, episode);
+
+    const servers = buildAnimeServers();
+    renderAnimeServerList(servers);
+    autoTryAnimeServers(servers);
+    loadAnimePlayerEpList(playerState.id, season, episode, title);
+  }
+
+  function renderAnimeServerList(servers) {
+    const list = document.getElementById('serverList');
+    list.innerHTML = servers.map((s, i) => {
+      const isActive = i === playerState.serverIndex;
+      const tried = playerState.triedServers.has(i) && !isActive;
+      const trying = isActive && playerState.autoTrying;
+      return `<button onclick="manualAnimeServer(${i})" class="server-btn px-2.5 py-1 rounded-lg border border-white/10 text-[11px] font-medium text-gray-400 flex items-center gap-1 flex-shrink-0
+        ${isActive ? 'active' : ''} ${tried ? 'tried' : ''} ${trying ? 'trying' : ''}"
+        style="${isActive ? 'background:#8b5cf6;border-color:#8b5cf6' : ''}">
+        ${s.name}
+      </button>`;
+    }).join('');
+  }
+
+  function getAnimeServerUrl(servers, index) {
+    const s = servers[index];
+    if (!s || !s.fn) return '';
+    // Kinobox dynamic entries just return the iframeUrl directly
+    if (s.fromKinobox) return s.fn();
+    // Collaps/Vibix need Kinopoisk ID
+    const url = s.fn(playerState.malId, playerState.episode, playerState.slug, playerState.id, playerState.kpId);
+    return url || '';
+  }
+
+  function autoTryAnimeServers(servers) {
+    const frame = document.getElementById('playerFrame');
+    const loader = document.getElementById('playerLoader');
+    const loaderText = document.getElementById('playerLoaderText');
+    const statusEl = document.getElementById('serverStatus');
+
+    // Skip servers that return empty URLs (e.g. Collaps without Kinopoisk ID)
+    while (playerState.serverIndex < servers.length) {
+      const url = getAnimeServerUrl(servers, playerState.serverIndex);
+      if (url) break;
+      playerState.triedServers.add(playerState.serverIndex);
+      playerState.serverIndex++;
+    }
+    if (playerState.serverIndex >= servers.length) {
+      playerState.autoTrying = false;
+      loader.style.display = 'none';
+      statusEl.textContent = 'All servers tried — pick one';
+      renderAnimeServerList(servers);
+      return;
+    }
+
+    frame.src = '';
+    loader.style.display = 'flex';
+    loaderText.textContent = `Trying ${servers[playerState.serverIndex].name}...`;
+    statusEl.textContent = 'Auto-trying servers...';
+
+    setTimeout(() => {
+      const url = getAnimeServerUrl(servers, playerState.serverIndex);
+      if (url) frame.src = url;
+      playerState.triedServers.add(playerState.serverIndex);
+      renderAnimeServerList(servers);
+    }, 200);
+
+    clearTimeout(window._serverTimeout);
+    window._serverTimeout = setTimeout(() => {
+      if (!playerState.autoTrying) return;
+      playerState.serverIndex++;
+      if (playerState.serverIndex < servers.length) {
+        autoTryAnimeServers(servers);
+      } else {
+        playerState.autoTrying = false;
+        loader.style.display = 'none';
+        statusEl.textContent = 'All servers tried — pick one';
+        renderAnimeServerList(servers);
+      }
+    }, 6000);
+
+    frame.onload = () => {
+      playerState.autoTrying = false;
+      loader.style.display = 'none';
+      statusEl.textContent = servers[playerState.serverIndex].name;
+      renderAnimeServerList(servers);
+      clearTimeout(window._serverTimeout);
+    };
+  }
+
+  function manualAnimeServer(index) {
+    const servers = buildAnimeServers();
+    playerState.autoTrying = false;
+    playerState.serverIndex = index;
+    clearTimeout(window._serverTimeout);
+
+    const frame = document.getElementById('playerFrame');
+    const loader = document.getElementById('playerLoader');
+    loader.style.display = 'flex';
+    document.getElementById('playerLoaderText').textContent = `Loading ${servers[index].name}...`;
+    frame.src = '';
+
+    setTimeout(() => {
+      frame.src = getAnimeServerUrl(servers, index);
+      playerState.triedServers.add(index);
+      renderAnimeServerList(servers);
+    }, 200);
+
+    frame.onload = () => {
+      loader.style.display = 'none';
+      document.getElementById('serverStatus').textContent = servers[index].name;
+      renderAnimeServerList(servers);
+    };
+    setTimeout(() => { loader.style.display = 'none'; }, 8000);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // WATCHLIST PAGE
+  // ══════════════════════════════════════════════════════════════════════
+  function renderWatchlist() {
+    const app = document.getElementById('app');
+    const wl = getWatchlist();
+    const items = Object.entries(wl).sort((a,b) => b[1].added - a[1].added);
+
+    if (items.length === 0) {
+      app.innerHTML = `
+        <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-16">
+          <h2 class="text-2xl font-bold mb-6">My List</h2>
+          <div class="text-center py-24 text-gray-600">
+            <i class="fa-solid fa-bookmark text-4xl mb-4 block"></i>
+            <p>Your watchlist is empty.</p>
+          </div>
+        </div>`;
+      return;
+    }
+
+    app.innerHTML = `
+      <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-16">
+        <h2 class="text-2xl font-bold mb-6">My List <span class="text-sm font-normal text-gray-500">(${items.length})</span></h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          ${items.map(([key, val]) => {
+            const isAnime = key.startsWith('anime');
+            const type = isAnime ? 'tv' : key.startsWith('tv') ? 'tv' : 'movie';
+            const id = key.split('_').slice(1).join('_');
+            return `<div class="card cursor-pointer group" onclick="${isAnime ? `showAnimeDetail(${id})` : `showDetail(${id}, '${type}')`}">
+              <div class="relative aspect-[2/3] rounded-xl overflow-hidden bg-surface-3">
+                ${val.poster ? `<img src="${val.poster}" class="w-full h-full object-cover" loading="lazy" />` : `<div class="w-full h-full flex items-center justify-center"><i class="fa-solid fa-film text-3xl text-gray-700"></i></div>`}
+                <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <div class="bg-${isAnime ? 'anime' : 'crimson'}/90 rounded-full w-12 h-12 flex items-center justify-center"><i class="fa-solid fa-play text-sm ml-0.5"></i></div>
+                </div>
+                ${isAnime ? `<div class="absolute top-2 left-2 bg-anime/80 rounded-md px-1.5 py-0.5 text-[9px] font-bold">ANIME</div>` : ''}
+              </div>
+              <p class="text-xs font-medium mt-2 truncate text-gray-200">${val.title}</p>
+              <p class="text-[10px] text-gray-600">${isAnime ? 'Anime' : type === 'tv' ? 'Series' : 'Movie'}</p>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // DETAIL MODAL (Movies/TV)
+  // ══════════════════════════════════════════════════════════════════════
+  async function showDetail(id, type = 'movie') {
+    const modal = document.getElementById('detailModal');
+    const content = document.getElementById('detailContent');
+    modal.classList.remove('hidden');
+    content.innerHTML = `<div class="p-8 text-center"><div class="w-8 h-8 border-2 border-surface-4 border-t-crimson rounded-full animate-spin mx-auto"></div></div>`;
+
+    try {
+      const data = await tmdb(`/${type}/${id}`, { append_to_response: 'credits,similar,videos' });
+      const title = data.title || data.name;
+      const year = (data.release_date || data.first_air_date || '').split('-')[0];
+      const rating = data.vote_average ? data.vote_average.toFixed(1) : '';
+      const runtime = data.runtime ? `${Math.floor(data.runtime/60)}h ${data.runtime%60}m` : '';
+      const backdrop = data.backdrop_path ? `${IMG_OG}${data.backdrop_path}` : '';
+      const poster = data.poster_path ? `${IMG_W500}${data.poster_path}` : '';
+      const inWatchlist = isInWatchlist(`${type}_${id}`);
+      const cast = (data.credits?.cast || []).slice(0, 8);
+      const seasons = data.seasons || [];
+      const histEntry = getHistoryEntry(`${type}_${id}`);
+      const resumeSeason = histEntry?.season || 1;
+      const resumeEp = histEntry?.episode || 1;
+
+      content.innerHTML = `
+        <div class="relative h-48 sm:h-64 overflow-hidden">
+          ${backdrop ? `<img src="${backdrop}" class="w-full h-full object-cover" />` : '<div class="w-full h-full bg-surface-3"></div>'}
+          <div class="absolute inset-0 bg-gradient-to-t from-surface-2 via-surface-2/60 to-transparent"></div>
+          <button onclick="closeDetail()" class="absolute top-3 right-3 bg-black/50 backdrop-blur-sm rounded-full w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white transition"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="px-5 sm:px-8 pb-8 -mt-16 relative">
+          <div class="flex gap-5">
+            <div class="w-28 sm:w-36 flex-shrink-0 -mt-8">
+              ${poster ? `<img src="${poster}" class="w-full rounded-xl shadow-2xl border-2 border-surface-3" />` : ''}
+            </div>
+            <div class="flex-1 min-w-0 pt-2">
+              <h2 class="text-xl sm:text-2xl font-bold mb-1">${title}</h2>
+              <div class="flex flex-wrap items-center gap-2 text-xs text-gray-400 mb-3">
+                ${year ? `<span>${year}</span>` : ''}
+                ${runtime ? `<span>· ${runtime}</span>` : ''}
+                ${type === 'tv' && data.number_of_seasons ? `<span>· ${data.number_of_seasons} Season${data.number_of_seasons > 1 ? 's' : ''}</span>` : ''}
+                ${rating ? `<span class="text-yellow-400 flex items-center gap-1"><i class="fa-solid fa-star" style="font-size:9px"></i>${rating}</span>` : ''}
+              </div>
+              <div class="flex flex-wrap gap-2 mb-4">
+                <button onclick="playFromDetail(${id}, '${type}')" class="bg-crimson hover:bg-crimson-dark text-white font-semibold px-5 py-2 rounded-lg text-sm transition flex items-center gap-2">
+                  <i class="fa-solid fa-play text-xs"></i>
+                  ${histEntry && type === 'tv' ? `Resume S${resumeSeason}E${resumeEp}` : 'Play'}
+                </button>
+                <button onclick="toggleWL(${id}, '${type}', '${title.replace(/'/g, "\\'")}', '${poster}')" id="wlBtn"
+                  class="bg-white/10 hover:bg-white/15 text-white px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">
+                  <i class="fa-solid ${inWatchlist ? 'fa-bookmark text-crimson' : 'fa-plus'}"></i>
+                  ${inWatchlist ? 'In List' : 'Add to List'}
+                </button>
+              </div>
+            </div>
+          </div>
+          ${(data.genres||[]).length ? `<div class="flex flex-wrap gap-1.5 mt-4 mb-3">${data.genres.map(g => `<span class="bg-white/5 border border-white/10 rounded-full px-2.5 py-0.5 text-[10px] text-gray-400">${g.name}</span>`).join('')}</div>` : ''}
+          <p class="text-sm text-gray-400 leading-relaxed mb-6">${data.overview || ''}</p>
+          ${type === 'tv' && seasons.length > 0 ? `
+            <div class="mb-6">
+              <h4 class="text-sm font-semibold mb-3 text-white/80">Seasons & Episodes</h4>
+              <div class="flex gap-2 overflow-x-auto row-scroll pb-2 mb-3" id="detailSeasons">
+                ${seasons.filter(s => s.season_number > 0).map(s => `
+                  <button onclick="loadSeasonEpisodes(${id}, ${s.season_number})" class="detail-season-btn px-3 py-1.5 rounded-lg text-xs font-medium border border-white/10 text-gray-400 hover:border-crimson hover:text-crimson transition flex-shrink-0" data-s="${s.season_number}">
+                    S${s.season_number} <span class="text-gray-600">(${s.episode_count})</span>
+                  </button>`).join('')}
+              </div>
+              <div id="detailEpisodes" class="space-y-1"></div>
+            </div>` : ''}
+          ${cast.length > 0 ? `
+            <div class="mb-6">
+              <h4 class="text-sm font-semibold mb-3 text-white/80">Cast</h4>
+              <div class="flex gap-3 overflow-x-auto row-scroll pb-2">
+                ${cast.map(c => `
+                  <div class="flex-shrink-0 text-center w-16">
+                    <div class="w-14 h-14 rounded-full overflow-hidden bg-surface-4 mx-auto mb-1">
+                      ${c.profile_path ? `<img src="${IMG_W500}${c.profile_path}" class="w-full h-full object-cover" />` : `<div class="w-full h-full flex items-center justify-center"><i class="fa-solid fa-user text-gray-600"></i></div>`}
+                    </div>
+                    <p class="text-[10px] text-gray-400 truncate">${c.name}</p>
+                  </div>`).join('')}
+              </div>
+            </div>` : ''}
+          ${data.similar?.results?.length > 0 ? `
+            <div>
+              <h4 class="text-sm font-semibold mb-3 text-white/80">Similar</h4>
+              <div class="flex gap-3 overflow-x-auto row-scroll pb-2">
+                ${data.similar.results.slice(0,10).map(item => `<div class="flex-shrink-0 w-[120px]">${mediaCard(item, type)}</div>`).join('')}
+              </div>
+            </div>` : ''}
+        </div>`;
+
+      if (type === 'tv' && seasons.length > 0) {
+        const firstSeason = seasons.find(s => s.season_number > 0)?.season_number || 1;
+        loadSeasonEpisodes(id, firstSeason);
+      }
+    } catch {
+      content.innerHTML = `<div class="p-8 text-center text-red-400">Failed to load details.</div>`;
+    }
+  }
+
+  async function loadSeasonEpisodes(seriesId, seasonNum) {
+    document.querySelectorAll('.detail-season-btn').forEach(btn => {
+      const active = parseInt(btn.dataset.s) === seasonNum;
+      btn.classList.toggle('border-crimson', active);
+      btn.classList.toggle('text-crimson', active);
+    });
+    const container = document.getElementById('detailEpisodes');
+    container.innerHTML = '<div class="skeleton h-12 rounded-lg"></div><div class="skeleton h-12 rounded-lg"></div>';
+    try {
+      const data = await tmdb(`/tv/${seriesId}/season/${seasonNum}`);
+      container.innerHTML = (data.episodes || []).map(ep => {
+        const watched = isEpWatched(seriesId, seasonNum, ep.episode_number);
+        return `
+          <div class="ep-btn flex items-center gap-3 p-3 rounded-lg bg-surface-3/50 hover:bg-surface-4 transition cursor-pointer group ${watched ? 'watched' : ''}"
+               onclick="playEpisode(${seriesId}, ${seasonNum}, ${ep.episode_number})">
+            <div class="text-xs font-mono text-gray-600 w-6 text-center flex-shrink-0">${ep.episode_number}</div>
+            ${ep.still_path ? `<img src="${IMG_W500}${ep.still_path}" class="w-24 h-14 rounded object-cover flex-shrink-0 hidden sm:block" />` : ''}
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium truncate ${watched ? 'text-gray-400' : 'text-white/90'}">${ep.name}</p>
+              <p class="text-[10px] text-gray-600 truncate">${ep.overview || ''}</p>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              ${watched ? '<span class="text-[10px] text-crimson font-medium">WATCHED</span>' : ''}
+              <div class="bg-white/5 group-hover:bg-crimson/80 rounded-full w-8 h-8 flex items-center justify-center transition"><i class="fa-solid fa-play text-[10px] ml-0.5"></i></div>
+            </div>
+          </div>`;
+      }).join('');
+    } catch {
+      container.innerHTML = '<p class="text-red-400 text-sm text-center py-4">Failed to load episodes.</p>';
+    }
+  }
+
+  function closeDetail() { document.getElementById('detailModal').classList.add('hidden'); }
+
+  function toggleWL(id, type, title, poster) {
+    const key = `${type}_${id}`;
+    const added = toggleWatchlist(key, { title, poster, type });
+    const btn = document.getElementById('wlBtn');
+    if (btn) btn.innerHTML = `<i class="fa-solid ${added ? 'fa-bookmark text-' + (type === 'anime' ? 'anime' : 'crimson') : 'fa-plus'}"></i> ${added ? 'In List' : 'Add to List'}`;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // MOVIE/TV PLAYER
+  // ══════════════════════════════════════════════════════════════════════
+  function playFromDetail(id, type) {
+    closeDetail();
+    if (type === 'tv') {
+      const hist = getHistoryEntry(`tv_${id}`);
+      openPlayer(id, type, hist?.season || 1, hist?.episode || 1);
+    } else {
+      openPlayer(id, type);
+    }
+  }
+
+  function playEpisode(seriesId, season, episode) {
+    closeDetail();
+    openPlayer(seriesId, 'tv', season, episode);
+  }
+
+  async function openPlayer(id, type, season = 1, episode = 1) {
+    playerState = { type, id, season, episode, serverIndex: 0, autoTrying: true, triedServers: new Set(), isAnime: false };
+
+    const frame = document.getElementById('playerFrame');
+    const modal = document.getElementById('playerModal');
+    const loader = document.getElementById('playerLoader');
+    const episodeBar = document.getElementById('episodeBar');
+
+    frame.src = '';
+    loader.style.display = 'flex';
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+
+    try {
+      const data = await tmdb(`/${type}/${id}`);
+      const title = data.title || data.name;
+      const poster = data.poster_path ? `${IMG_W500}${data.poster_path}` : '';
+      document.getElementById('playerTitle').textContent = title;
+      document.getElementById('playerMeta').textContent = type === 'tv' ? `Season ${season} · Episode ${episode}` : (data.release_date || '').split('-')[0];
+      saveToHistory(`${type}_${id}`, { type, tmdbId: id, title, poster, ...(type === 'tv' ? { season, episode } : {}) });
+      if (type === 'tv') markEpWatched(id, season, episode);
+      if (type === 'tv') {
+        episodeBar.classList.remove('hidden');
+        await loadPlayerEpisodes(id, data.seasons || [], season, episode);
+      } else {
+        episodeBar.classList.add('hidden');
+      }
+    } catch {}
+
+    renderServerList();
+    autoTryServers();
+  }
+
+  async function loadPlayerEpisodes(seriesId, seasons, currentSeason, currentEp) {
+    const select = document.getElementById('seasonSelect');
+    select.innerHTML = seasons.filter(s => s.season_number > 0)
+      .map(s => `<option value="${s.season_number}" ${s.season_number === currentSeason ? 'selected' : ''}>Season ${s.season_number}</option>`).join('');
+    select.onchange = () => loadPlayerEpisodeList(seriesId, parseInt(select.value), currentEp);
+    loadPlayerEpisodeList(seriesId, currentSeason, currentEp);
+  }
+
+  async function loadPlayerEpisodeList(seriesId, seasonNum, highlightEp) {
+    const list = document.getElementById('episodeList');
+    try {
+      const data = await tmdb(`/tv/${seriesId}/season/${seasonNum}`);
+      list.innerHTML = (data.episodes || []).map(ep => {
+        const isCurrent = seasonNum === playerState.season && ep.episode_number === playerState.episode;
+        const watched = isEpWatched(seriesId, seasonNum, ep.episode_number);
+        return `<button onclick="switchEpisode(${seasonNum}, ${ep.episode_number})"
+          class="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition
+            ${isCurrent ? 'bg-crimson border-crimson text-white' : watched ? 'border-crimson/30 text-crimson/70 bg-crimson/5' : 'border-white/10 text-gray-500 hover:border-white/20 hover:text-white'}">
+          E${ep.episode_number}
+        </button>`;
+      }).join('');
+    } catch {}
+  }
+
+  function switchEpisode(season, episode) {
+    playerState.season = season;
+    playerState.episode = episode;
+    playerState.serverIndex = 0;
+    playerState.autoTrying = true;
+    playerState.triedServers = new Set();
+    document.getElementById('playerMeta').textContent = `Season ${season} · Episode ${episode}`;
+    saveToHistory(`tv_${playerState.id}`, { season, episode });
+    markEpWatched(playerState.id, season, episode);
+    renderServerList();
+    autoTryServers();
+    loadPlayerEpisodeList(playerState.id, season, episode);
+  }
+
+  function renderServerList() {
+    const list = document.getElementById('serverList');
+    list.innerHTML = SERVERS.map((s, i) => {
+      const isActive = i === playerState.serverIndex;
+      const tried = playerState.triedServers.has(i) && !isActive;
+      const trying = isActive && playerState.autoTrying;
+      return `<button onclick="manualSwitchServer(${i})" class="server-btn px-2.5 py-1 rounded-lg border border-white/10 text-[11px] font-medium text-gray-400 flex items-center gap-1 flex-shrink-0
+        ${isActive ? 'active' : ''} ${tried ? 'tried' : ''} ${trying ? 'trying' : ''}">
+        ${s.name}
+      </button>`;
+    }).join('');
+  }
+
+  function getServerUrl() {
+    const s = SERVERS[playerState.serverIndex];
+    return playerState.type === 'tv' ? s.tv(playerState.id, playerState.season, playerState.episode) : s.movie(playerState.id);
+  }
+
+  function autoTryServers() {
+    const frame = document.getElementById('playerFrame');
+    const loader = document.getElementById('playerLoader');
+    const loaderText = document.getElementById('playerLoaderText');
+    const statusEl = document.getElementById('serverStatus');
+
+    frame.src = '';
+    loader.style.display = 'flex';
+    loaderText.textContent = `Trying ${SERVERS[playerState.serverIndex].name}...`;
+    statusEl.textContent = 'Auto-trying servers...';
+
+    setTimeout(() => { frame.src = getServerUrl(); playerState.triedServers.add(playerState.serverIndex); renderServerList(); }, 200);
+
+    clearTimeout(window._serverTimeout);
+    window._serverTimeout = setTimeout(() => {
+      if (!playerState.autoTrying) return;
+      const next = playerState.serverIndex + 1;
+      if (next < SERVERS.length) { playerState.serverIndex = next; autoTryServers(); }
+      else { playerState.autoTrying = false; loader.style.display = 'none'; statusEl.textContent = 'All servers tried — pick one'; renderServerList(); }
+    }, 6000);
+
+    frame.onload = () => { playerState.autoTrying = false; loader.style.display = 'none'; statusEl.textContent = SERVERS[playerState.serverIndex].name; renderServerList(); clearTimeout(window._serverTimeout); };
+  }
+
+  function manualSwitchServer(index) {
+    playerState.autoTrying = false;
+    playerState.serverIndex = index;
+    clearTimeout(window._serverTimeout);
+    const frame = document.getElementById('playerFrame');
+    const loader = document.getElementById('playerLoader');
+    loader.style.display = 'flex';
+    document.getElementById('playerLoaderText').textContent = `Loading ${SERVERS[index].name}...`;
+    frame.src = '';
+    setTimeout(() => { frame.src = getServerUrl(); playerState.triedServers.add(index); renderServerList(); }, 200);
+    frame.onload = () => { loader.style.display = 'none'; document.getElementById('serverStatus').textContent = SERVERS[index].name; renderServerList(); };
+    setTimeout(() => { loader.style.display = 'none'; }, 8000);
+  }
+
+  function closePlayer() {
+    playerState.autoTrying = false;
+    clearTimeout(window._serverTimeout);
+    document.getElementById('playerFrame').src = '';
+    document.getElementById('playerModal').classList.add('hidden');
+    document.body.style.overflow = '';
+    navigate(currentPage, true);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // SEARCH
+  // ══════════════════════════════════════════════════════════════════════
+  let searchTimer;
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+    clearTimeout(searchTimer);
+    const q = e.target.value.trim();
+    const dropdown = document.getElementById('searchDropdown');
+    if (q.length < 2) { dropdown.classList.add('hidden'); return; }
+
+    searchTimer = setTimeout(async () => {
+      try {
+        const data = await tmdb('/search/multi', { query: q });
+        const results = (data.results || []).filter(r => r.media_type === 'movie' || r.media_type === 'tv').slice(0, 8);
+
+        if (results.length === 0) {
+          dropdown.innerHTML = '<div class="p-4 text-sm text-gray-500 text-center">No results</div>';
+        } else {
+          dropdown.innerHTML = results.map(r => {
+            const title = r.title || r.name;
+            const year = (r.release_date || r.first_air_date || '').split('-')[0];
+            const poster = r.poster_path ? `${IMG_W500}${r.poster_path}` : '';
+            const type = r.media_type;
+            const isAnime = type === 'tv' && r.genre_ids?.includes(16) && r.original_language === 'ja';
+            return `
+              <div onclick="document.getElementById('searchDropdown').classList.add('hidden'); document.getElementById('searchInput').value=''; ${isAnime ? `showAnimeDetail(${r.id})` : `showDetail(${r.id}, '${type}')`}"
+                class="flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 cursor-pointer transition">
+                <div class="w-10 h-14 rounded overflow-hidden bg-surface-4 flex-shrink-0">
+                  ${poster ? `<img src="${poster}" class="w-full h-full object-cover" />` : ''}
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium truncate">${title}</p>
+                  <p class="text-[10px] text-gray-500">${year} · ${isAnime ? 'Anime' : type === 'tv' ? 'Series' : 'Movie'}</p>
+                </div>
+                <span class="text-[10px] uppercase border rounded px-1.5 py-0.5 ${isAnime ? 'text-anime border-anime/30' : 'text-gray-600 border-white/10'}">${isAnime ? 'Anime' : type}</span>
+              </div>`;
+          }).join('');
+        }
+        dropdown.classList.remove('hidden');
+      } catch {}
+    }, 300);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#searchInput') && !e.target.closest('#searchDropdown')) {
+      document.getElementById('searchDropdown').classList.add('hidden');
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // NAVIGATION
+  // ══════════════════════════════════════════════════════════════════════
+  function navigate(page, silent = false) {
+    currentPage = page;
+    if (!silent) currentGenre = null;
+    if (!silent) { storage.set('lastPage', page); syncToServer('page', { page }); }
+
+    document.querySelectorAll('.nav-link').forEach(btn => {
+      const isActive = btn.dataset.page === page;
+      btn.classList.toggle('text-white', isActive && page !== 'anime');
+      btn.classList.toggle('bg-white/5', isActive);
+      btn.classList.toggle('text-gray-400', !isActive && page !== 'anime');
+    });
+
+    switch(page) {
+      case 'home': renderHome(); break;
+      case 'movies': renderBrowse('movie'); break;
+      case 'series': renderBrowse('tv'); break;
+      case 'anime': renderAnime(); break;
+      case 'watchlist': renderWatchlist(); break;
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function filterGenre(genreId, type) { currentGenre = genreId; renderBrowse(type); }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (!document.getElementById('playerModal').classList.contains('hidden')) closePlayer();
+      else if (!document.getElementById('detailModal').classList.contains('hidden')) closeDetail();
+    }
+  });
+
+  window.addEventListener('scroll', () => {
+    const nav = document.getElementById('navbar');
+    if (window.scrollY > 50) nav.classList.add('bg-surface-1/95', 'backdrop-blur-md', 'border-b', 'border-white/5');
+    else nav.classList.remove('bg-surface-1/95', 'backdrop-blur-md', 'border-b', 'border-white/5');
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // LOCK SCREEN
+  // ══════════════════════════════════════════════════════════════════════
+  const PASS = 'oooo';
+  const lockScreen = document.getElementById('lockScreen');
+  const lockInput = document.getElementById('lockInput');
+  let appUnlocked = sessionStorage.getItem('omair_unlocked') === '1';
+
+  if (appUnlocked) {
+    lockScreen.style.display = 'none';
+  } else {
+    lockInput.focus();
+  }
+
+  lockInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      if (lockInput.value === PASS) {
+        appUnlocked = true;
+        sessionStorage.setItem('omair_unlocked', '1');
+        lockScreen.style.opacity = '1';
+        lockScreen.style.transition = 'opacity 0.3s ease';
+        lockScreen.style.opacity = '0';
+        setTimeout(() => { lockScreen.style.display = 'none'; }, 300);
+      } else {
+        document.getElementById('lockError').classList.remove('hidden');
+        lockInput.value = '';
+        lockInput.classList.add('border-crimson');
+        setTimeout(() => { lockInput.classList.remove('border-crimson'); document.getElementById('lockError').classList.add('hidden'); }, 1500);
+      }
+    }
+  });
+
+  // Also unlock as user types if password matches (instant feel)
+  lockInput.addEventListener('input', () => {
+    if (lockInput.value === PASS) {
+      appUnlocked = true;
+      sessionStorage.setItem('omair_unlocked', '1');
+      lockScreen.style.transition = 'opacity 0.3s ease';
+      lockScreen.style.opacity = '0';
+      setTimeout(() => { lockScreen.style.display = 'none'; }, 300);
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // AD SHIELD — blocks popups, redirects, and first-click ad triggers
+  // ══════════════════════════════════════════════════════════════════════
+
+  // 1. Block popup windows (ads love window.open)
+  const _origOpen = window.open;
+  window.open = function(url) {
+    // Only allow opens that look like actual navigation (not ad domains)
+    if (url && (url.includes(window.location.hostname) || url.startsWith('blob:'))) {
+      return _origOpen.apply(this, arguments);
+    }
+    console.log('[OmairMovies] Blocked popup:', url);
+    return null;
+  };
+
+  // 2. Block beforeunload hijacks (ads trying to navigate you away)
+  window.addEventListener('beforeunload', (e) => {
+    if (document.getElementById('playerModal') && !document.getElementById('playerModal').classList.contains('hidden')) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
+  // 3. Click shield — absorbs first N clicks on the player area
+  // Most embed players trigger ad popups on the first 1-2 clicks
+  let shieldClicks = 0;
+  const AD_SHIELD_CLICKS = 2;
+
+  function activateAdShield() {
+    shieldClicks = 0;
+    const shield = document.getElementById('adShield');
+    shield.style.display = 'block';
+    document.getElementById('shieldText').textContent = `Click ${AD_SHIELD_CLICKS}x to dismiss ad shield`;
+  }
+
+  // Auto-activate shield whenever iframe loads new content
+  document.getElementById('playerFrame').addEventListener('load', function() {
+    if (this.src && this.src !== '' && this.src !== 'about:blank') {
+      activateAdShield();
+    }
+  });
+
+  document.getElementById('adShield').addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    shieldClicks++;
+    const remaining = AD_SHIELD_CLICKS - shieldClicks;
+    if (remaining <= 0) {
+      document.getElementById('adShield').style.display = 'none';
+    } else {
+      document.getElementById('shieldText').textContent = `Click ${remaining} more time${remaining > 1 ? 's' : ''} to play`;
+    }
+  });
+
+  // 4. Block common ad-related redirects via CSP meta (injected dynamically)
+  // This blocks scripts from known ad networks from loading in our page context
+  const cspMeta = document.createElement('meta');
+  cspMeta.httpEquiv = 'Content-Security-Policy';
+  cspMeta.content = "child-src blob: https:; worker-src blob:;";
+  // Don't add this — it would block the iframes themselves. Instead rely on popup blocking.
+
+  // ══════════════════════════════════════════════════════════════════════
+  // SYNC PANEL
+  // ══════════════════════════════════════════════════════════════════════
+  function toggleSyncPanel() {
+    const panel = document.getElementById('syncPanel');
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden')) {
+      document.getElementById('userIdInput').value = USER_ID;
+      // Show green dot if synced
+      if (serverSynced) document.getElementById('syncDot').classList.remove('hidden');
+    }
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#syncPanel') && !e.target.closest('[onclick*="toggleSyncPanel"]')) {
+      document.getElementById('syncPanel').classList.add('hidden');
+    }
+  });
+
+  function copyUserId() {
+    navigator.clipboard.writeText(USER_ID).then(() => {
+      const msg = document.getElementById('syncMsg');
+      msg.textContent = 'ID copied to clipboard!';
+      msg.classList.remove('hidden');
+      setTimeout(() => msg.classList.add('hidden'), 2000);
+    });
+  }
+
+  async function linkDevice() {
+    const newId = document.getElementById('linkIdInput').value.trim();
+    if (!newId || newId === USER_ID) return;
+    // Switch to the linked user ID
+    localStorage.setItem('omair_user_id', newId);
+    const msg = document.getElementById('syncMsg');
+    msg.textContent = 'Linked! Reloading with synced data...';
+    msg.classList.remove('hidden');
+    setTimeout(() => window.location.reload(), 1000);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // INIT
+  // ══════════════════════════════════════════════════════════════════════
+  (async () => {
+    // Load server data first (merges with localStorage)
+    await loadFromServer();
+    // Navigate to last page if we have one, otherwise home
+    const lastPage = storage.get('lastPage', 'home');
+    navigate(lastPage);
+  })();
+  </script>
+</body>
+</html>
