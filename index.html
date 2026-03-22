@@ -1188,16 +1188,23 @@
             const isAnime = key.startsWith('anime');
             const type = isAnime ? 'tv' : key.startsWith('tv') ? 'tv' : 'movie';
             const id = key.split('_').slice(1).join('_');
-            return `<div class="card cursor-pointer group" onclick="${isAnime ? `showAnimeDetail(${id})` : `showDetail(${id}, '${type}')`}">
-              <div class="relative aspect-[2/3] rounded-xl overflow-hidden bg-surface-3">
-                ${val.poster ? `<img src="${val.poster}" class="w-full h-full object-cover" loading="lazy" />` : `<div class="w-full h-full flex items-center justify-center"><i class="fa-solid fa-film text-3xl text-gray-700"></i></div>`}
-                <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <div class="bg-${isAnime ? 'anime' : 'crimson'}/90 rounded-full w-12 h-12 flex items-center justify-center"><i class="fa-solid fa-play text-sm ml-0.5"></i></div>
+            return `<div class="card group relative">
+              <div class="cursor-pointer" onclick="${isAnime ? `showAnimeDetail(${id})` : `showDetail(${id}, '${type}')`}">
+                <div class="relative aspect-[2/3] rounded-xl overflow-hidden bg-surface-3">
+                  ${val.poster ? `<img src="${val.poster}" class="w-full h-full object-cover" loading="lazy" />` : `<div class="w-full h-full flex items-center justify-center"><i class="fa-solid fa-film text-3xl text-gray-700"></i></div>`}
+                  <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div class="bg-${isAnime ? 'anime' : 'crimson'}/90 rounded-full w-12 h-12 flex items-center justify-center"><i class="fa-solid fa-play text-sm ml-0.5"></i></div>
+                  </div>
+                  ${isAnime ? `<div class="absolute top-2 left-2 bg-anime/80 rounded-md px-1.5 py-0.5 text-[9px] font-bold">ANIME</div>` : ''}
                 </div>
-                ${isAnime ? `<div class="absolute top-2 left-2 bg-anime/80 rounded-md px-1.5 py-0.5 text-[9px] font-bold">ANIME</div>` : ''}
+                <p class="text-xs font-medium mt-2 truncate text-gray-200">${val.title}</p>
+                <p class="text-[10px] text-gray-600">${isAnime ? 'Anime' : type === 'tv' ? 'Series' : 'Movie'}</p>
               </div>
-              <p class="text-xs font-medium mt-2 truncate text-gray-200">${val.title}</p>
-              <p class="text-[10px] text-gray-600">${isAnime ? 'Anime' : type === 'tv' ? 'Series' : 'Movie'}</p>
+              <button onclick="event.stopPropagation(); removeFromWatchlist('${key}')"
+                class="absolute top-2 right-2 bg-black/70 hover:bg-red-600 backdrop-blur-sm rounded-full w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white transition opacity-0 group-hover:opacity-100 z-10"
+                title="Remove from list">
+                <i class="fa-solid fa-xmark text-xs"></i>
+              </button>
             </div>`;
           }).join('')}
         </div>
@@ -1343,6 +1350,14 @@
     const added = toggleWatchlist(key, { title, poster, type });
     const btn = document.getElementById('wlBtn');
     if (btn) btn.innerHTML = `<i class="fa-solid ${added ? 'fa-bookmark text-' + (type === 'anime' ? 'anime' : 'crimson') : 'fa-plus'}"></i> ${added ? 'In List' : 'Add to List'}`;
+  }
+
+  function removeFromWatchlist(key) {
+    const w = getWatchlist();
+    delete w[key];
+    storage.set('watchlist', w);
+    syncToServer('watchlist', { key, data: null });
+    renderWatchlist(); // Re-render the page
   }
 
   // ══════════════════════════════════════════════════════════════════════
