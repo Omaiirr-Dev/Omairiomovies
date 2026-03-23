@@ -95,9 +95,7 @@
         </button>
       </div>
       <p id="lockError" class="text-crimson text-xs mt-3 hidden">Wrong password</p>
-      <p id="debugOut" class="text-yellow-400 text-xs mt-2 font-mono"></p>
-      <button onclick="document.getElementById('debugOut').textContent='val=['+document.getElementById('lockInput').value+'] len='+document.getElementById('lockInput').value.length" class="text-gray-600 text-[10px] mt-2 underline">debug: show input value</button>
-      <p class="text-gray-700 text-[10px] mt-4">Private access only</p>
+      <p class="text-gray-700 text-[10px] mt-6">Private access only</p>
     </div>
   </div>
 
@@ -1640,59 +1638,6 @@
     if (window.scrollY > 50) nav.classList.add('bg-surface-1/95', 'backdrop-blur-md', 'border-b', 'border-white/5');
     else nav.classList.remove('bg-surface-1/95', 'backdrop-blur-md', 'border-b', 'border-white/5');
   });
-
-  // ══════════════════════════════════════════════════════════════════════
-  // AD SHIELD — blocks popups, redirects, and first-click ad triggers
-  // ══════════════════════════════════════════════════════════════════════
-
-  // 1. Block popup windows (ads love window.open)
-  const _origOpen = window.open;
-  window.open = function(url) {
-    // Only allow opens that look like actual navigation (not ad domains)
-    if (url && (url.includes(window.location.hostname) || url.startsWith('blob:'))) {
-      return _origOpen.apply(this, arguments);
-    }
-    console.log('[OmairMovies] Blocked popup:', url);
-    return null;
-  };
-
-  // 2. Block beforeunload hijacks (ads trying to navigate you away)
-  window.addEventListener('beforeunload', (e) => {
-    if (document.getElementById('playerModal') && !document.getElementById('playerModal').classList.contains('hidden')) {
-      e.preventDefault();
-      e.returnValue = '';
-    }
-  });
-
-  // 3. Block focus stealing (ads try to steal focus to trigger clicks)
-  window.addEventListener('blur', () => {
-    if (!document.getElementById('playerModal').classList.contains('hidden')) {
-      setTimeout(() => window.focus(), 0);
-    }
-  });
-
-  // 5. Block any iframe trying to navigate the top window
-  window.addEventListener('message', (e) => {
-    // Ignore postMessages that try to redirect
-    if (e.data && typeof e.data === 'string' && (e.data.includes('redirect') || e.data.includes('window.top'))) {
-      e.stopImmediatePropagation();
-    }
-  });
-
-  // 6. Periodically check if any rogue elements appeared in our DOM (ad injection)
-  setInterval(() => {
-    // Remove any injected iframes that aren't ours
-    document.querySelectorAll('iframe:not(#playerFrame)').forEach(f => {
-      if (!f.closest('#detailContent') && !f.closest('#app')) f.remove();
-    });
-    // Remove any injected fixed/absolute positioned divs that could be overlays
-    document.querySelectorAll('body > div:not(#app):not(#playerModal):not(#detailModal):not(#lockScreen)').forEach(d => {
-      const style = window.getComputedStyle(d);
-      if ((style.position === 'fixed' || style.position === 'absolute') && style.zIndex > 50) {
-        d.remove();
-      }
-    });
-  }, 2000);
 
   // ══════════════════════════════════════════════════════════════════════
   // INIT
