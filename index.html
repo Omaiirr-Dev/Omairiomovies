@@ -88,10 +88,9 @@
         <span class="text-3xl font-black"><span class="text-crimson">Omair</span><span class="text-white/90">Movies</span></span>
       </div>
       <div class="relative flex gap-2 justify-center">
-        <input id="lockInput" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Enter password"
-          autofocus
-          class="w-48 bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm text-white text-center placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-crimson/50 transition" style="-webkit-text-security: disc; text-security: disc;" />
-        <button onclick="tryUnlock()" class="bg-crimson hover:bg-crimson-dark text-white font-semibold px-5 py-3 rounded-xl text-sm transition">
+        <input id="lockInput" type="password" placeholder="••••"
+          class="w-48 bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm text-white text-center placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-crimson/50 transition" />
+        <button onclick="window.tryUnlock()" class="bg-crimson hover:bg-crimson-dark text-white font-semibold px-5 py-3 rounded-xl text-sm transition">
           <i class="fa-solid fa-arrow-right"></i>
         </button>
       </div>
@@ -200,16 +199,17 @@
   window.tryUnlock = function() {
     const input = document.getElementById('lockInput');
     const screen = document.getElementById('lockScreen');
-    if (input.value === 'oooo') {
+    const val = input.value.trim().toLowerCase();
+    if (val === 'oooo') {
       sessionStorage.setItem('omair_unlocked', '1');
       screen.style.transition = 'opacity 0.3s ease';
       screen.style.opacity = '0';
       setTimeout(() => { screen.style.display = 'none'; }, 300);
     } else {
+      document.getElementById('lockError').textContent = 'Wrong password';
       document.getElementById('lockError').classList.remove('hidden');
       input.value = '';
-      input.classList.add('border-crimson');
-      setTimeout(() => { input.classList.remove('border-crimson'); document.getElementById('lockError').classList.add('hidden'); }, 1500);
+      setTimeout(() => { document.getElementById('lockError').classList.add('hidden'); }, 2000);
     }
   };
   // Enter key support
