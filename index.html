@@ -161,6 +161,14 @@
           <div class="w-10 h-10 border-2 border-surface-4 border-t-crimson rounded-full animate-spin mb-3"></div>
           <p id="playerLoaderText" class="text-gray-500 text-sm">Connecting to server...</p>
         </div>
+        <!-- Ad shield: absorbs the FIRST tap (which triggers ads), then vanishes -->
+        <div id="adShield" class="absolute inset-0 z-[9] cursor-pointer flex items-center justify-center" style="display:none; background: transparent;">
+          <div class="bg-black/70 backdrop-blur-sm rounded-2xl px-6 py-4 text-center pointer-events-none">
+            <i class="fa-solid fa-hand-pointer text-crimson text-2xl mb-2 block"></i>
+            <p class="text-white text-sm font-semibold">Tap to activate player</p>
+            <p class="text-gray-500 text-[10px] mt-1">This blocks the ad popup</p>
+          </div>
+        </div>
         <iframe id="playerFrame" class="absolute inset-0 w-full h-full" frameborder="0" allowfullscreen
           referrerpolicy="origin" allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
           src=""></iframe>
@@ -278,6 +286,55 @@
     {id:9648,name:'Mystery'},{id:10764,name:'Reality'},{id:10765,name:'Sci-Fi'},{id:10766,name:'Soap'},
     {id:10768,name:'War'}
   ];
+
+  // ══════════════════════════════════════════════════════════════════════
+  // AD BLOCKER — nuclear mode
+  // ══════════════════════════════════════════════════════════════════════
+  // 1. Kill window.open globally — no tab can be opened
+  const _origOpen = window.open;
+  window.open = function() { return null; };
+
+  // 2. Block any attempt to navigate away
+  window.addEventListener('beforeunload', (e) => {
+    if (!document.getElementById('playerModal').classList.contains('hidden')) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
+  // 3. Intercept and kill link clicks that try to leave
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a[target="_blank"]');
+    if (a && !a.closest('#app')) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+
+  // 4. Ad shield — absorbs ONE tap then vanishes
+  function showAdShield() {
+    const shield = document.getElementById('adShield');
+    if (shield) { shield.style.display = 'flex'; shield._tapped = false; }
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    const shield = document.getElementById('adShield');
+    if (!shield) return;
+    shield.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      // One tap — shield gone, player ready
+      shield.style.display = 'none';
+    }, { capture: true });
+  });
+
+  // 5. Nuke popups: periodically check and close any window refs
+  setInterval(() => {
+    try { if (window._adWin && !window._adWin.closed) window._adWin.close(); } catch {}
+  }, 500);
+
+  // 6. Block focus stealing (ads try to blur your window)
+  window.addEventListener('blur', () => {
+    if (!document.getElementById('playerModal').classList.contains('hidden')) {
+      setTimeout(() => window.focus(), 50);
+    }
+  });
 
   // ══════════════════════════════════════════════════════════════════════
   // STORAGE (localStorage + server sync — single global store, no user IDs)
@@ -1441,7 +1498,7 @@
       else { playerState.autoTrying = false; loader.style.display = 'none'; statusEl.textContent = 'All servers tried — pick one'; renderServerList(); }
     }, 6000);
 
-    frame.onload = () => { playerState.autoTrying = false; loader.style.display = 'none'; statusEl.textContent = SERVERS[playerState.serverIndex].name; renderServerList(); clearTimeout(window._serverTimeout); };
+    frame.onload = () => { playerState.autoTrying = false; loader.style.display = 'none'; statusEl.textContent = SERVERS[playerState.serverIndex].name; renderServerList(); clearTimeout(window._serverTimeout); showAdShield(); };
   }
 
   function manualSwitchServer(index) {
@@ -1454,7 +1511,7 @@
     document.getElementById('playerLoaderText').textContent = `Loading ${SERVERS[index].name}...`;
     frame.src = '';
     setTimeout(() => { frame.src = getServerUrl(); playerState.triedServers.add(index); renderServerList(); }, 200);
-    frame.onload = () => { loader.style.display = 'none'; document.getElementById('serverStatus').textContent = SERVERS[index].name; renderServerList(); };
+    frame.onload = () => { loader.style.display = 'none'; document.getElementById('serverStatus').textContent = SERVERS[index].name; renderServerList(); showAdShield(); };
     setTimeout(() => { loader.style.display = 'none'; }, 8000);
   }
 
