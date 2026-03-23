@@ -95,7 +95,9 @@
         </button>
       </div>
       <p id="lockError" class="text-crimson text-xs mt-3 hidden">Wrong password</p>
-      <p class="text-gray-700 text-[10px] mt-6">Private access only</p>
+      <p id="debugOut" class="text-yellow-400 text-xs mt-2 font-mono"></p>
+      <button onclick="document.getElementById('debugOut').textContent='val=['+document.getElementById('lockInput').value+'] len='+document.getElementById('lockInput').value.length" class="text-gray-600 text-[10px] mt-2 underline">debug: show input value</button>
+      <p class="text-gray-700 text-[10px] mt-4">Private access only</p>
     </div>
   </div>
 
