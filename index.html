@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -163,6 +164,10 @@
           <div class="w-10 h-10 border-2 border-surface-4 border-t-crimson rounded-full animate-spin mb-3"></div>
           <p id="playerLoaderText" class="text-gray-500 text-sm">Connecting to server...</p>
         </div>
+        <!-- Custom HLS player (ad-free) -->
+        <video id="hlsPlayer" class="absolute inset-0 w-full h-full hidden" controls playsinline
+          controlsList="nodownload"></video>
+        <!-- Iframe fallback -->
         <iframe id="playerFrame" class="absolute inset-0 w-full h-full" frameborder="0" allowfullscreen
           referrerpolicy="origin" allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
           src=""></iframe>
@@ -1376,8 +1381,148 @@
       }
     } catch {}
 
+    // Try extracting a direct stream first (ad-free), fall back to iframe servers
+    await tryExtractedStream();
+  }
+
+  let hlsInstance = null;
+
+  async function tryExtractedStream() {
+    const video = document.getElementById('hlsPlayer');
+    const frame = document.getElementById('playerFrame');
+    const loader = document.getElementById('playerLoader');
+    const loaderText = document.getElementById('playerLoaderText');
+    const statusEl = document.getElementById('serverStatus');
+
+    loaderText.textContent = 'Extracting ad-free stream...';
+
+    try {
+      const params = new URLSearchParams({ id: playerState.id, type: playerState.type });
+      if (playerState.type === 'tv') { params.set('s', playerState.season); params.set('e', playerState.episode); }
+      const res = await fetch(`/api/extract?${params}`);
+      const data = await res.json();
+
+      if (data.streams && data.streams.length > 0) {
+        const stream = data.streams[0];
+        const m3u8Url = `/hls-proxy?url=${encodeURIComponent(stream.url)}&ref=${encodeURIComponent(stream.referer || '')}`;
+
+        // Show our player, hide iframe
+        frame.style.display = 'none';
+        frame.src = '';
+        video.style.display = 'block';
+        video.classList.remove('hidden');
+
+        // Set up HLS
+        if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+
+        if (Hls.isSupported()) {
+          hlsInstance = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60 });
+          hlsInstance.loadSource(m3u8Url);
+          hlsInstance.attachMedia(video);
+          hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+            video.volume = 0.5;
+            video.play().catch(() => {});
+            loader.style.display = 'none';
+            statusEl.textContent = `${stream.name} (Ad-Free)`;
+          });
+          hlsInstance.on(Hls.Events.ERROR, (e, d) => {
+            if (d.fatal) {
+              console.log('[HLS error, falling back to iframe]', d);
+              hlsInstance.destroy(); hlsInstance = null;
+              video.style.display = 'none';
+              video.classList.add('hidden');
+              frame.style.display = '';
+              renderServerList();
+              autoTryServers();
+            }
+          });
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          // Native HLS (Safari/iOS)
+          video.src = m3u8Url;
+          video.volume = 0.5;
+          video.addEventListener('loadedmetadata', () => {
+            video.play().catch(() => {});
+            loader.style.display = 'none';
+            statusEl.textContent = `${stream.name} (Ad-Free)`;
+          }, { once: true });
+          video.addEventListener('error', () => {
+            video.style.display = 'none';
+            video.classList.add('hidden');
+            frame.style.display = '';
+            renderServerList();
+            autoTryServers();
+          }, { once: true });
+        }
+
+        // Render server list with the extracted stream as first option
+        const list = document.getElementById('serverList');
+        const extractedBtns = data.streams.map((s, i) =>
+          `<button onclick="switchExtractedStream(${i})" class="server-btn px-2.5 py-1 rounded-lg border text-[11px] font-medium flex-shrink-0 ${i === 0 ? 'active border-green-500 text-green-400' : 'border-white/10 text-gray-400'}">
+            <i class="fa-solid fa-shield-halved mr-1 text-green-400" style="font-size:9px"></i>${s.name}
+          </button>`
+        ).join('');
+        const iframeBtns = SERVERS.map((s, i) =>
+          `<button onclick="switchToIframeServer(${i})" class="server-btn px-2.5 py-1 rounded-lg border border-white/10 text-[11px] font-medium text-gray-400 flex-shrink-0">${s.name}</button>`
+        ).join('');
+        list.innerHTML = extractedBtns + `<span class="text-[9px] text-gray-700 flex-shrink-0 px-1">|</span>` + iframeBtns;
+
+        // Store streams for switching
+        playerState.extractedStreams = data.streams;
+        return; // Success — don't fall through to iframe
+      }
+    } catch (e) {
+      console.log('[Extract failed]', e);
+    }
+
+    // No extracted streams — fall back to iframe servers
     renderServerList();
     autoTryServers();
+  }
+
+  function switchExtractedStream(index) {
+    const stream = playerState.extractedStreams?.[index];
+    if (!stream) return;
+    const video = document.getElementById('hlsPlayer');
+    const frame = document.getElementById('playerFrame');
+    const loader = document.getElementById('playerLoader');
+
+    frame.style.display = 'none';
+    frame.src = '';
+    video.style.display = 'block';
+    video.classList.remove('hidden');
+    loader.style.display = 'flex';
+    document.getElementById('playerLoaderText').textContent = `Loading ${stream.name}...`;
+
+    const m3u8Url = `/hls-proxy?url=${encodeURIComponent(stream.url)}&ref=${encodeURIComponent(stream.referer || '')}`;
+
+    if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+    if (Hls.isSupported()) {
+      hlsInstance = new Hls();
+      hlsInstance.loadSource(m3u8Url);
+      hlsInstance.attachMedia(video);
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.volume = 0.5;
+        video.play().catch(() => {});
+        loader.style.display = 'none';
+        document.getElementById('serverStatus').textContent = `${stream.name} (Ad-Free)`;
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = m3u8Url;
+      video.volume = 0.5;
+      video.onloadedmetadata = () => { video.play().catch(() => {}); loader.style.display = 'none'; };
+    }
+  }
+
+  function switchToIframeServer(index) {
+    const video = document.getElementById('hlsPlayer');
+    const frame = document.getElementById('playerFrame');
+    if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+    video.style.display = 'none';
+    video.classList.add('hidden');
+    video.src = '';
+    frame.style.display = '';
+    playerState.serverIndex = index;
+    manualSwitchServer(index);
   }
 
   async function loadPlayerEpisodes(seriesId, seasons, currentSeason, currentEp) {
@@ -1413,8 +1558,7 @@
     document.getElementById('playerMeta').textContent = `Season ${season} · Episode ${episode}`;
     saveToHistory(`tv_${playerState.id}`, { season, episode });
     markEpWatched(playerState.id, season, episode);
-    renderServerList();
-    autoTryServers();
+    tryExtractedStream();
     loadPlayerEpisodeList(playerState.id, season, episode);
   }
 
@@ -1515,7 +1659,14 @@
   function closePlayer() {
     playerState.autoTrying = false;
     clearTimeout(window._serverTimeout);
+    clearTimeout(window._proxyFallback);
     document.getElementById('playerFrame').src = '';
+    const video = document.getElementById('hlsPlayer');
+    if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+    video.src = '';
+    video.style.display = 'none';
+    video.classList.add('hidden');
+    document.getElementById('playerFrame').style.display = '';
     document.getElementById('playerModal').classList.add('hidden');
     document.body.style.overflow = '';
     navigate(currentPage, true);
