@@ -87,10 +87,13 @@
       <div class="mb-6">
         <span class="text-3xl font-black"><span class="text-crimson">Omair</span><span class="text-white/90">Movies</span></span>
       </div>
-      <div class="relative">
+      <div class="relative flex gap-2 justify-center">
         <input id="lockInput" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Enter password"
           autofocus
-          class="w-64 bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm text-white text-center placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-crimson/50 transition" style="-webkit-text-security: disc; text-security: disc;" />
+          class="w-48 bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm text-white text-center placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-crimson/50 transition" style="-webkit-text-security: disc; text-security: disc;" />
+        <button onclick="tryUnlock()" class="bg-crimson hover:bg-crimson-dark text-white font-semibold px-5 py-3 rounded-xl text-sm transition">
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
       </div>
       <p id="lockError" class="text-crimson text-xs mt-3 hidden">Wrong password</p>
       <p class="text-gray-700 text-[10px] mt-6">Private access only</p>
@@ -1627,40 +1630,21 @@
     lockInput.focus();
   }
 
-  lockInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      if (lockInput.value === PASS) {
-        appUnlocked = true;
-        sessionStorage.setItem('omair_unlocked', '1');
-        lockScreen.style.opacity = '1';
-        lockScreen.style.transition = 'opacity 0.3s ease';
-        lockScreen.style.opacity = '0';
-        setTimeout(() => { lockScreen.style.display = 'none'; }, 300);
-      } else {
-        document.getElementById('lockError').classList.remove('hidden');
-        lockInput.value = '';
-        lockInput.classList.add('border-crimson');
-        setTimeout(() => { lockInput.classList.remove('border-crimson'); document.getElementById('lockError').classList.add('hidden'); }, 1500);
-      }
-    }
-  });
-
-  // Unlock as user types — listen to ALL input events for mobile compat
-  function checkUnlock() {
+  function tryUnlock() {
     if (lockInput.value === PASS) {
       appUnlocked = true;
       sessionStorage.setItem('omair_unlocked', '1');
       lockScreen.style.transition = 'opacity 0.3s ease';
       lockScreen.style.opacity = '0';
       setTimeout(() => { lockScreen.style.display = 'none'; }, 300);
+    } else {
+      document.getElementById('lockError').classList.remove('hidden');
+      lockInput.value = '';
+      lockInput.classList.add('border-crimson');
+      setTimeout(() => { lockInput.classList.remove('border-crimson'); document.getElementById('lockError').classList.add('hidden'); }, 1500);
     }
   }
-  lockInput.addEventListener('input', checkUnlock);
-  lockInput.addEventListener('keyup', checkUnlock);
-  lockInput.addEventListener('change', checkUnlock);
-  lockInput.addEventListener('compositionend', checkUnlock);
-  // Fallback polling for stubborn mobile keyboards
-  setInterval(() => { if (!appUnlocked && lockInput.value) checkUnlock(); }, 200);
+  lockInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
 
   // ══════════════════════════════════════════════════════════════════════
   // AD SHIELD — blocks popups, redirects, and first-click ad triggers
