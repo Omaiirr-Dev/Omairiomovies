@@ -1049,13 +1049,14 @@
     }).join('');
   }
 
-  function getAnimeServerUrl(servers, index) {
+  function getAnimeServerUrl(servers, index, useProxy) {
     const s = servers[index];
     if (!s || !s.fn) return '';
     let url;
     if (s.fromKinobox) url = s.fn();
     else url = s.fn(playerState.malId, playerState.episode, playerState.slug, playerState.id, playerState.kpId);
-    return proxyUrl(url || '');
+    if (!url) return '';
+    return useProxy ? proxyUrl(url) : url;
   }
 
   function autoTryAnimeServers(servers) {
@@ -1084,60 +1085,48 @@
     loaderText.textContent = `Trying ${servers[playerState.serverIndex].name}...`;
     statusEl.textContent = 'Auto-trying servers...';
 
-    setTimeout(() => {
-      const url = getAnimeServerUrl(servers, playerState.serverIndex);
-      if (url) frame.src = url;
-      playerState.triedServers.add(playerState.serverIndex);
-      renderAnimeServerList(servers);
-    }, 200);
+    // Try proxy first, fall back to direct after 4s
+    const proxyUrl_ = getAnimeServerUrl(servers, playerState.serverIndex, true);
+    const directUrl_ = getAnimeServerUrl(servers, playerState.serverIndex, false);
+    setTimeout(() => { if (proxyUrl_) frame.src = proxyUrl_; playerState.triedServers.add(playerState.serverIndex); renderAnimeServerList(servers); }, 200);
+
+    clearTimeout(window._proxyFallback);
+    window._proxyFallback = setTimeout(() => {
+      if (loader.style.display !== 'none' && directUrl_) { loaderText.textContent = `${servers[playerState.serverIndex].name} (direct)...`; frame.src = directUrl_; }
+    }, 4000);
 
     clearTimeout(window._serverTimeout);
     window._serverTimeout = setTimeout(() => {
       if (!playerState.autoTrying) return;
       playerState.serverIndex++;
-      if (playerState.serverIndex < servers.length) {
-        autoTryAnimeServers(servers);
-      } else {
-        playerState.autoTrying = false;
-        loader.style.display = 'none';
-        statusEl.textContent = 'All servers tried — pick one';
-        renderAnimeServerList(servers);
-      }
-    }, 6000);
+      if (playerState.serverIndex < servers.length) autoTryAnimeServers(servers);
+      else { playerState.autoTrying = false; loader.style.display = 'none'; statusEl.textContent = 'All servers tried — pick one'; renderAnimeServerList(servers); }
+    }, 8000);
 
     frame.onload = () => {
-      playerState.autoTrying = false;
-      loader.style.display = 'none';
+      clearTimeout(window._proxyFallback);
+      playerState.autoTrying = false; loader.style.display = 'none';
       statusEl.textContent = servers[playerState.serverIndex].name;
-      renderAnimeServerList(servers);
-      clearTimeout(window._serverTimeout);
+      renderAnimeServerList(servers); clearTimeout(window._serverTimeout);
     };
   }
 
   function manualAnimeServer(index) {
     const servers = buildAnimeServers();
-    playerState.autoTrying = false;
-    playerState.serverIndex = index;
+    playerState.autoTrying = false; playerState.serverIndex = index;
     clearTimeout(window._serverTimeout);
-
     const frame = document.getElementById('playerFrame');
     const loader = document.getElementById('playerLoader');
     loader.style.display = 'flex';
-    document.getElementById('playerLoaderText').textContent = `Loading ${servers[index].name}...`;
+    document.getElementById('playerLoaderText').textContent = `${servers[index].name} (ad-free)...`;
     frame.src = '';
-
-    setTimeout(() => {
-      frame.src = getAnimeServerUrl(servers, index);
-      playerState.triedServers.add(index);
-      renderAnimeServerList(servers);
-    }, 200);
-
-    frame.onload = () => {
-      loader.style.display = 'none';
-      document.getElementById('serverStatus').textContent = servers[index].name;
-      renderAnimeServerList(servers);
-    };
-    setTimeout(() => { loader.style.display = 'none'; }, 8000);
+    const proxyUrl_ = getAnimeServerUrl(servers, index, true);
+    const directUrl_ = getAnimeServerUrl(servers, index, false);
+    setTimeout(() => { if (proxyUrl_) frame.src = proxyUrl_; playerState.triedServers.add(index); renderAnimeServerList(servers); }, 200);
+    clearTimeout(window._proxyFallback);
+    window._proxyFallback = setTimeout(() => { if (loader.style.display !== 'none' && directUrl_) frame.src = directUrl_; }, 4000);
+    frame.onload = () => { clearTimeout(window._proxyFallback); loader.style.display = 'none'; document.getElementById('serverStatus').textContent = servers[index].name; renderAnimeServerList(servers); };
+    setTimeout(() => { loader.style.display = 'none'; }, 10000);
   }
 
   // ══════════════════════════════════════════════════════════════════════
@@ -1442,30 +1431,69 @@
     }).join('');
   }
 
-  // Route embeds through our proxy to inject ad-killer into their HTML
+  // Try proxy first (ad-free), fall back to direct if proxy fails
   function proxyUrl(url) {
     if (!url) return '';
     return '/proxy?url=' + encodeURIComponent(url);
   }
+  function directUrl(url) { return url || ''; }
 
-  function getServerUrl() {
+  function getServerUrl(useProxy) {
     const s = SERVERS[playerState.serverIndex];
     const raw = playerState.type === 'tv' ? s.tv(playerState.id, playerState.season, playerState.episode) : s.movie(playerState.id);
-    return proxyUrl(raw);
+    return useProxy ? proxyUrl(raw) : raw;
   }
 
-  function autoTryServers() {
+  function loadServer(useProxy) {
     const frame = document.getElementById('playerFrame');
     const loader = document.getElementById('playerLoader');
     const loaderText = document.getElementById('playerLoaderText');
     const statusEl = document.getElementById('serverStatus');
+    const name = SERVERS[playerState.serverIndex].name;
 
     frame.src = '';
     loader.style.display = 'flex';
-    loaderText.textContent = `Trying ${SERVERS[playerState.serverIndex].name}...`;
+    loaderText.textContent = useProxy ? `${name} (ad-free)...` : `${name}...`;
+
+    const url = getServerUrl(useProxy);
+    setTimeout(() => { frame.src = url; }, 200);
+
+    // If proxy, give it 4s — if it doesn't load, fall back to direct
+    clearTimeout(window._proxyFallback);
+    if (useProxy) {
+      window._proxyFallback = setTimeout(() => {
+        if (loader.style.display !== 'none') {
+          loaderText.textContent = `${name} (direct)...`;
+          frame.src = getServerUrl(false);
+        }
+      }, 4000);
+    }
+
+    frame.onerror = () => {
+      if (useProxy) { frame.src = getServerUrl(false); }
+    };
+
+    frame.onload = () => {
+      clearTimeout(window._proxyFallback);
+      loader.style.display = 'none';
+      statusEl.textContent = name;
+      playerState.triedServers.add(playerState.serverIndex);
+      renderServerList();
+      if (playerState.autoTrying) {
+        playerState.autoTrying = false;
+        clearTimeout(window._serverTimeout);
+      }
+    };
+  }
+
+  function autoTryServers() {
+    const loader = document.getElementById('playerLoader');
+    const statusEl = document.getElementById('serverStatus');
     statusEl.textContent = 'Auto-trying servers...';
 
-    setTimeout(() => { frame.src = getServerUrl(); playerState.triedServers.add(playerState.serverIndex); renderServerList(); }, 200);
+    loadServer(true);
+    playerState.triedServers.add(playerState.serverIndex);
+    renderServerList();
 
     clearTimeout(window._serverTimeout);
     window._serverTimeout = setTimeout(() => {
@@ -1473,23 +1501,15 @@
       const next = playerState.serverIndex + 1;
       if (next < SERVERS.length) { playerState.serverIndex = next; autoTryServers(); }
       else { playerState.autoTrying = false; loader.style.display = 'none'; statusEl.textContent = 'All servers tried — pick one'; renderServerList(); }
-    }, 6000);
-
-    frame.onload = () => { playerState.autoTrying = false; loader.style.display = 'none'; statusEl.textContent = SERVERS[playerState.serverIndex].name; renderServerList(); clearTimeout(window._serverTimeout); };
+    }, 8000);
   }
 
   function manualSwitchServer(index) {
     playerState.autoTrying = false;
     playerState.serverIndex = index;
     clearTimeout(window._serverTimeout);
-    const frame = document.getElementById('playerFrame');
-    const loader = document.getElementById('playerLoader');
-    loader.style.display = 'flex';
-    document.getElementById('playerLoaderText').textContent = `Loading ${SERVERS[index].name}...`;
-    frame.src = '';
-    setTimeout(() => { frame.src = getServerUrl(); playerState.triedServers.add(index); renderServerList(); }, 200);
-    frame.onload = () => { loader.style.display = 'none'; document.getElementById('serverStatus').textContent = SERVERS[index].name; renderServerList(); };
-    setTimeout(() => { loader.style.display = 'none'; }, 8000);
+    loadServer(true);
+    setTimeout(() => { document.getElementById('playerLoader').style.display = 'none'; }, 10000);
   }
 
   function closePlayer() {
