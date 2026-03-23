@@ -195,7 +195,9 @@
           </div>
         </div>
         <iframe id="playerFrame" class="absolute inset-0 w-full h-full" frameborder="0" allowfullscreen
-          referrerpolicy="origin" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" src=""></iframe>
+          referrerpolicy="origin" allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-orientation-lock"
+          src=""></iframe>
       </div>
       <div id="episodeBar" class="hidden bg-surface-2/90 backdrop-blur-sm border-t border-white/5 flex-shrink-0">
         <div class="px-4 sm:px-6 py-2 flex items-center gap-3">
@@ -1669,16 +1671,20 @@
     }
   });
 
-  // 3. Click shield — absorbs first N clicks on the player area
-  // Most embed players trigger ad popups on the first 1-2 clicks
+  // 3. Click shield — absorbs ad-triggering clicks before you can interact
+  // Mobile needs more clicks because touch triggers more ad layers
+  const isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);
   let shieldClicks = 0;
-  const AD_SHIELD_CLICKS = 2;
+  const AD_SHIELD_CLICKS = isMobile ? 4 : 2;
+  let shieldCooldown = false;
 
   function activateAdShield() {
     shieldClicks = 0;
+    shieldCooldown = false;
     const shield = document.getElementById('adShield');
     shield.style.display = 'block';
-    document.getElementById('shieldText').textContent = `Click ${AD_SHIELD_CLICKS}x to dismiss ad shield`;
+    shield.style.pointerEvents = 'auto';
+    document.getElementById('shieldText').textContent = `Tap ${AD_SHIELD_CLICKS}x to unlock player`;
   }
 
   // Auto-activate shield whenever iframe loads new content
@@ -1691,21 +1697,61 @@
   document.getElementById('adShield').addEventListener('click', (e) => {
     e.stopPropagation();
     e.preventDefault();
+    if (shieldCooldown) return;
     shieldClicks++;
     const remaining = AD_SHIELD_CLICKS - shieldClicks;
     if (remaining <= 0) {
       document.getElementById('adShield').style.display = 'none';
+      // Brief re-shield after 1s — catches delayed ad popups on first real interaction
+      if (isMobile) {
+        shieldCooldown = true;
+        setTimeout(() => {
+          shieldClicks = 0;
+          shieldCooldown = false;
+          // Show a smaller "quick shield" that only needs 1 tap
+          const shield = document.getElementById('adShield');
+          shield.style.display = 'block';
+          document.getElementById('shieldText').textContent = 'Tap once more — catching late ads';
+          // Auto-dismiss after 3s if user doesn't tap
+          setTimeout(() => {
+            shield.style.display = 'none';
+          }, 3000);
+        }, 800);
+      }
     } else {
-      document.getElementById('shieldText').textContent = `Click ${remaining} more time${remaining > 1 ? 's' : ''} to play`;
+      document.getElementById('shieldText').textContent = `Tap ${remaining} more time${remaining > 1 ? 's' : ''} to play`;
     }
   });
 
-  // 4. Block common ad-related redirects via CSP meta (injected dynamically)
-  // This blocks scripts from known ad networks from loading in our page context
-  const cspMeta = document.createElement('meta');
-  cspMeta.httpEquiv = 'Content-Security-Policy';
-  cspMeta.content = "child-src blob: https:; worker-src blob:;";
-  // Don't add this — it would block the iframes themselves. Instead rely on popup blocking.
+  // 4. Block focus stealing (ads try to steal focus to trigger clicks)
+  window.addEventListener('blur', () => {
+    if (!document.getElementById('playerModal').classList.contains('hidden')) {
+      setTimeout(() => window.focus(), 0);
+    }
+  });
+
+  // 5. Block any iframe trying to navigate the top window
+  window.addEventListener('message', (e) => {
+    // Ignore postMessages that try to redirect
+    if (e.data && typeof e.data === 'string' && (e.data.includes('redirect') || e.data.includes('window.top'))) {
+      e.stopImmediatePropagation();
+    }
+  });
+
+  // 6. Periodically check if any rogue elements appeared in our DOM (ad injection)
+  setInterval(() => {
+    // Remove any injected iframes that aren't ours
+    document.querySelectorAll('iframe:not(#playerFrame)').forEach(f => {
+      if (!f.closest('#detailContent') && !f.closest('#app')) f.remove();
+    });
+    // Remove any injected fixed/absolute positioned divs that could be overlays
+    document.querySelectorAll('body > div:not(#app):not(#playerModal):not(#detailModal):not(#lockScreen)').forEach(d => {
+      const style = window.getComputedStyle(d);
+      if ((style.position === 'fixed' || style.position === 'absolute') && style.zIndex > 50) {
+        d.remove();
+      }
+    });
+  }, 2000);
 
   // ══════════════════════════════════════════════════════════════════════
   // SYNC PANEL
