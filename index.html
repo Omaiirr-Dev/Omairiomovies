@@ -88,9 +88,9 @@
         <span class="text-3xl font-black"><span class="text-crimson">Omair</span><span class="text-white/90">Movies</span></span>
       </div>
       <div class="relative">
-        <input id="lockInput" type="password" placeholder="Enter password"
+        <input id="lockInput" type="text" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Enter password"
           autofocus
-          class="w-64 bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm text-white text-center placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-crimson/50 transition tracking-widest" />
+          class="w-64 bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm text-white text-center placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-crimson/50 transition" style="-webkit-text-security: disc; text-security: disc;" />
       </div>
       <p id="lockError" class="text-crimson text-xs mt-3 hidden">Wrong password</p>
       <p class="text-gray-700 text-[10px] mt-6">Private access only</p>
@@ -1645,8 +1645,8 @@
     }
   });
 
-  // Also unlock as user types if password matches (instant feel)
-  lockInput.addEventListener('input', () => {
+  // Unlock as user types — listen to ALL input events for mobile compat
+  function checkUnlock() {
     if (lockInput.value === PASS) {
       appUnlocked = true;
       sessionStorage.setItem('omair_unlocked', '1');
@@ -1654,7 +1654,13 @@
       lockScreen.style.opacity = '0';
       setTimeout(() => { lockScreen.style.display = 'none'; }, 300);
     }
-  });
+  }
+  lockInput.addEventListener('input', checkUnlock);
+  lockInput.addEventListener('keyup', checkUnlock);
+  lockInput.addEventListener('change', checkUnlock);
+  lockInput.addEventListener('compositionend', checkUnlock);
+  // Fallback polling for stubborn mobile keyboards
+  setInterval(() => { if (!appUnlocked && lockInput.value) checkUnlock(); }, 200);
 
   // ══════════════════════════════════════════════════════════════════════
   // AD SHIELD — blocks popups, redirects, and first-click ad triggers
