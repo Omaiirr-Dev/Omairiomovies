@@ -129,31 +129,6 @@
           class="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-crimson/50 focus:border-crimson/50 transition" />
         <div id="searchDropdown" class="absolute top-full left-0 right-0 mt-2 bg-surface-3 border border-white/10 rounded-xl overflow-hidden shadow-2xl hidden max-h-[400px] overflow-y-auto z-50"></div>
       </div>
-      <!-- Sync / Settings -->
-      <div class="relative flex-shrink-0">
-        <button onclick="toggleSyncPanel()" class="text-gray-500 hover:text-white transition p-2" title="Sync & Settings">
-          <i class="fa-solid fa-cloud text-sm"></i>
-          <span id="syncDot" class="absolute top-1 right-1 w-2 h-2 rounded-full bg-green-500 hidden"></span>
-        </button>
-        <div id="syncPanel" class="absolute top-full right-0 mt-2 bg-surface-3 border border-white/10 rounded-xl shadow-2xl hidden w-72 p-4 z-50">
-          <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3"><i class="fa-solid fa-cloud mr-1"></i> Cross-Device Sync</h4>
-          <p class="text-[11px] text-gray-500 mb-3">Your data syncs automatically. To access on another device, enter this ID:</p>
-          <div class="flex gap-2 mb-3">
-            <input id="userIdInput" type="text" readonly class="flex-1 bg-surface-4 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none" />
-            <button onclick="copyUserId()" class="bg-surface-4 hover:bg-surface-5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-400 hover:text-white transition">
-              <i class="fa-solid fa-copy"></i>
-            </button>
-          </div>
-          <div class="border-t border-white/5 pt-3 mt-1">
-            <p class="text-[11px] text-gray-500 mb-2">Link another device:</p>
-            <div class="flex gap-2">
-              <input id="linkIdInput" type="text" placeholder="Paste ID here..." class="flex-1 bg-surface-4 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-crimson/30" />
-              <button onclick="linkDevice()" class="bg-crimson hover:bg-crimson-dark rounded-lg px-3 py-1.5 text-xs font-medium transition">Link</button>
-            </div>
-          </div>
-          <div id="syncMsg" class="text-[10px] text-green-400 mt-2 hidden"></div>
-        </div>
-      </div>
     </div>
   </nav>
 
@@ -305,20 +280,7 @@
   ];
 
   // ══════════════════════════════════════════════════════════════════════
-  // USER ID (persists across sessions, used for server-side sync)
-  // ══════════════════════════════════════════════════════════════════════
-  function getUserId() {
-    let id = localStorage.getItem('omair_user_id');
-    if (!id) {
-      id = 'u_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-      localStorage.setItem('omair_user_id', id);
-    }
-    return id;
-  }
-  const USER_ID = getUserId();
-
-  // ══════════════════════════════════════════════════════════════════════
-  // STORAGE (localStorage + server sync)
+  // STORAGE (localStorage + server sync — single global store, no user IDs)
   // ══════════════════════════════════════════════════════════════════════
   const storage = {
     get(key, fallback = null) { try { const v = localStorage.getItem(`omair_${key}`); return v ? JSON.parse(v) : fallback; } catch { return fallback; } },
@@ -333,7 +295,7 @@
     try {
       await fetch(`${API_BASE}/api/${endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-Id': USER_ID },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
     } catch {} // Silent fail — localStorage is the fallback
@@ -341,9 +303,7 @@
 
   async function loadFromServer() {
     try {
-      const res = await fetch(`${API_BASE}/api/sync`, {
-        headers: { 'X-User-Id': USER_ID }
-      });
+      const res = await fetch(`${API_BASE}/api/sync`);
       if (!res.ok) return;
       const data = await res.json();
       // Merge server data into localStorage (server wins for newer entries)
@@ -1691,44 +1651,6 @@
       }
     });
   }, 2000);
-
-  // ══════════════════════════════════════════════════════════════════════
-  // SYNC PANEL
-  // ══════════════════════════════════════════════════════════════════════
-  function toggleSyncPanel() {
-    const panel = document.getElementById('syncPanel');
-    panel.classList.toggle('hidden');
-    if (!panel.classList.contains('hidden')) {
-      document.getElementById('userIdInput').value = USER_ID;
-      // Show green dot if synced
-      if (serverSynced) document.getElementById('syncDot').classList.remove('hidden');
-    }
-  }
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#syncPanel') && !e.target.closest('[onclick*="toggleSyncPanel"]')) {
-      document.getElementById('syncPanel').classList.add('hidden');
-    }
-  });
-
-  function copyUserId() {
-    navigator.clipboard.writeText(USER_ID).then(() => {
-      const msg = document.getElementById('syncMsg');
-      msg.textContent = 'ID copied to clipboard!';
-      msg.classList.remove('hidden');
-      setTimeout(() => msg.classList.add('hidden'), 2000);
-    });
-  }
-
-  async function linkDevice() {
-    const newId = document.getElementById('linkIdInput').value.trim();
-    if (!newId || newId === USER_ID) return;
-    // Switch to the linked user ID
-    localStorage.setItem('omair_user_id', newId);
-    const msg = document.getElementById('syncMsg');
-    msg.textContent = 'Linked! Reloading with synced data...';
-    msg.classList.remove('hidden');
-    setTimeout(() => window.location.reload(), 1000);
-  }
 
   // ══════════════════════════════════════════════════════════════════════
   // INIT

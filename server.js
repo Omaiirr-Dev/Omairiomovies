@@ -9,28 +9,16 @@ const DB_FILE = path.join(DATA_DIR, 'db.json');
 // Ensure data directory exists (Railway volume mount point)
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-// ─── Simple JSON DB ───────────────────────────────────────────────
+// ─── Simple JSON DB (single global store — one user, all devices) ───
 function loadDB() {
   try {
     if (fs.existsSync(DB_FILE)) return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
   } catch {}
-  return { users: {} };
+  return { history: {}, watchlist: {}, episodes: {}, lastPage: 'home' };
 }
 
 function saveDB(db) {
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
-}
-
-function getUserData(userId) {
-  const db = loadDB();
-  if (!db.users[userId]) db.users[userId] = { history: {}, watchlist: {}, episodes: {}, lastPage: 'home' };
-  return db.users[userId];
-}
-
-function setUserData(userId, data) {
-  const db = loadDB();
-  db.users[userId] = { ...getUserData(userId), ...data, updatedAt: Date.now() };
-  saveDB(db);
 }
 
 // ─── MIME types ───────────────────────────────────────────────────
@@ -58,7 +46,7 @@ function parseBody(req) {
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-User-Id');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
 
 function json(res, data, status = 200) {
@@ -71,7 +59,6 @@ function json(res, data, status = 200) {
 const server = http.createServer(async (req, res) => {
   cors(res);
 
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
     res.end();
@@ -83,27 +70,35 @@ const server = http.createServer(async (req, res) => {
 
   // ── API Routes ──────────────────────────────────────────────────
   if (pathname.startsWith('/api/')) {
-    const userId = req.headers['x-user-id'] || 'default';
 
-    // GET /api/sync — load all user data
+    // GET /api/sync — load all data
     if (req.method === 'GET' && pathname === '/api/sync') {
-      return json(res, getUserData(userId));
+      return json(res, loadDB());
     }
 
-    // POST /api/sync — save all user data
+    // POST /api/sync — save all data
     if (req.method === 'POST' && pathname === '/api/sync') {
       const body = await parseBody(req);
-      setUserData(userId, body);
+      const db = loadDB();
+      if (body.history) db.history = { ...db.history, ...body.history };
+      if (body.watchlist) db.watchlist = body.watchlist;
+      if (body.episodes) {
+        Object.entries(body.episodes).forEach(([k, v]) => {
+          db.episodes[k] = { ...(db.episodes[k] || {}), ...v };
+        });
+      }
+      if (body.lastPage) db.lastPage = body.lastPage;
+      saveDB(db);
       return json(res, { ok: true });
     }
 
     // POST /api/history — update a single history entry
     if (req.method === 'POST' && pathname === '/api/history') {
       const body = await parseBody(req);
-      const userData = getUserData(userId);
+      const db = loadDB();
       if (body.key && body.data) {
-        userData.history[body.key] = { ...userData.history[body.key], ...body.data, updated: Date.now() };
-        setUserData(userId, userData);
+        db.history[body.key] = { ...db.history[body.key], ...body.data, updated: Date.now() };
+        saveDB(db);
       }
       return json(res, { ok: true });
     }
@@ -111,26 +106,26 @@ const server = http.createServer(async (req, res) => {
     // POST /api/watchlist — toggle watchlist item
     if (req.method === 'POST' && pathname === '/api/watchlist') {
       const body = await parseBody(req);
-      const userData = getUserData(userId);
+      const db = loadDB();
       if (body.key) {
-        if (userData.watchlist[body.key]) {
-          delete userData.watchlist[body.key];
+        if (db.watchlist[body.key]) {
+          delete db.watchlist[body.key];
         } else {
-          userData.watchlist[body.key] = { ...body.data, added: Date.now() };
+          db.watchlist[body.key] = { ...body.data, added: Date.now() };
         }
-        setUserData(userId, userData);
+        saveDB(db);
       }
-      return json(res, { ok: true, inList: !!userData.watchlist[body.key] });
+      return json(res, { ok: true, inList: !!db.watchlist[body.key] });
     }
 
     // POST /api/episodes — mark episode watched
     if (req.method === 'POST' && pathname === '/api/episodes') {
       const body = await parseBody(req);
-      const userData = getUserData(userId);
+      const db = loadDB();
       if (body.seriesId && body.key) {
-        if (!userData.episodes[body.seriesId]) userData.episodes[body.seriesId] = {};
-        userData.episodes[body.seriesId][body.key] = true;
-        setUserData(userId, userData);
+        if (!db.episodes[body.seriesId]) db.episodes[body.seriesId] = {};
+        db.episodes[body.seriesId][body.key] = true;
+        saveDB(db);
       }
       return json(res, { ok: true });
     }
@@ -138,9 +133,9 @@ const server = http.createServer(async (req, res) => {
     // POST /api/page — save last visited page
     if (req.method === 'POST' && pathname === '/api/page') {
       const body = await parseBody(req);
-      const userData = getUserData(userId);
-      userData.lastPage = body.page || 'home';
-      setUserData(userId, userData);
+      const db = loadDB();
+      db.lastPage = body.page || 'home';
+      saveDB(db);
       return json(res, { ok: true });
     }
 
