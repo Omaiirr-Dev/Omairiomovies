@@ -195,6 +195,29 @@
 
   <script>
   // ══════════════════════════════════════════════════════════════════════
+  // LOCK SCREEN (defined first so it always works)
+  // ══════════════════════════════════════════════════════════════════════
+  window.tryUnlock = function() {
+    const input = document.getElementById('lockInput');
+    const screen = document.getElementById('lockScreen');
+    if (input.value === 'oooo') {
+      sessionStorage.setItem('omair_unlocked', '1');
+      screen.style.transition = 'opacity 0.3s ease';
+      screen.style.opacity = '0';
+      setTimeout(() => { screen.style.display = 'none'; }, 300);
+    } else {
+      document.getElementById('lockError').classList.remove('hidden');
+      input.value = '';
+      input.classList.add('border-crimson');
+      setTimeout(() => { input.classList.remove('border-crimson'); document.getElementById('lockError').classList.add('hidden'); }, 1500);
+    }
+  };
+  // Enter key support
+  document.getElementById('lockInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
+  // Auto-hide if already unlocked
+  if (sessionStorage.getItem('omair_unlocked') === '1') document.getElementById('lockScreen').style.display = 'none';
+
+  // ══════════════════════════════════════════════════════════════════════
   // CONFIG
   // ══════════════════════════════════════════════════════════════════════
   const API_KEY  = '699b8c71cf0dd6893a8aac2b0f57cbc9';
@@ -305,10 +328,10 @@
     }
   });
 
-  // 3. Intercept and kill link clicks that try to leave
+  // 3. Intercept and kill link clicks that try to leave (skip lockscreen & app)
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a[target="_blank"]');
-    if (a && !a.closest('#app')) { e.preventDefault(); e.stopPropagation(); }
+    if (a && !a.closest('#app') && !a.closest('#lockScreen')) { e.preventDefault(); e.stopPropagation(); }
   }, true);
 
   // 4. Ad shield — absorbs ONE tap then vanishes
@@ -1615,36 +1638,6 @@
     if (window.scrollY > 50) nav.classList.add('bg-surface-1/95', 'backdrop-blur-md', 'border-b', 'border-white/5');
     else nav.classList.remove('bg-surface-1/95', 'backdrop-blur-md', 'border-b', 'border-white/5');
   });
-
-  // ══════════════════════════════════════════════════════════════════════
-  // LOCK SCREEN
-  // ══════════════════════════════════════════════════════════════════════
-  const PASS = 'oooo';
-  const lockScreen = document.getElementById('lockScreen');
-  const lockInput = document.getElementById('lockInput');
-  let appUnlocked = sessionStorage.getItem('omair_unlocked') === '1';
-
-  if (appUnlocked) {
-    lockScreen.style.display = 'none';
-  } else {
-    lockInput.focus();
-  }
-
-  function tryUnlock() {
-    if (lockInput.value === PASS) {
-      appUnlocked = true;
-      sessionStorage.setItem('omair_unlocked', '1');
-      lockScreen.style.transition = 'opacity 0.3s ease';
-      lockScreen.style.opacity = '0';
-      setTimeout(() => { lockScreen.style.display = 'none'; }, 300);
-    } else {
-      document.getElementById('lockError').classList.remove('hidden');
-      lockInput.value = '';
-      lockInput.classList.add('border-crimson');
-      setTimeout(() => { lockInput.classList.remove('border-crimson'); document.getElementById('lockError').classList.add('hidden'); }, 1500);
-    }
-  }
-  lockInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
 
   // ══════════════════════════════════════════════════════════════════════
   // AD SHIELD — blocks popups, redirects, and first-click ad triggers
