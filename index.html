@@ -71,7 +71,6 @@
     div[id*="adb"], div[class*="adb"],
     div[id*="ad-"], div[class*="ad-"] { display: none !important; }
 
-    #adShield { background: transparent; }
 
     /* Anime lang toggle */
     .lang-toggle { position: relative; display: inline-flex; background: #1a1a1f; border-radius: 10px; padding: 3px; border: 1px solid rgba(255,255,255,0.05); }
@@ -186,13 +185,6 @@
         <div id="playerLoader" class="absolute inset-0 flex flex-col items-center justify-center bg-surface-1 z-10">
           <div class="w-10 h-10 border-2 border-surface-4 border-t-crimson rounded-full animate-spin mb-3"></div>
           <p id="playerLoaderText" class="text-gray-500 text-sm">Connecting to server...</p>
-        </div>
-        <!-- Ad click shield: absorbs first 2 clicks (which trigger ads), then disappears -->
-        <div id="adShield" class="absolute inset-0 z-[8] cursor-pointer" style="display:none">
-          <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-sm rounded-full px-4 py-2 text-xs text-gray-300 flex items-center gap-2 pointer-events-none select-none">
-            <i class="fa-solid fa-shield-halved text-crimson"></i>
-            <span id="shieldText">Click to dismiss ad shield</span>
-          </div>
         </div>
         <iframe id="playerFrame" class="absolute inset-0 w-full h-full" frameborder="0" allowfullscreen
           referrerpolicy="origin" allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
@@ -1671,59 +1663,7 @@
     }
   });
 
-  // 3. Click shield — absorbs ad-triggering clicks before you can interact
-  // Mobile needs more clicks because touch triggers more ad layers
-  const isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);
-  let shieldClicks = 0;
-  const AD_SHIELD_CLICKS = isMobile ? 4 : 2;
-  let shieldCooldown = false;
-
-  function activateAdShield() {
-    shieldClicks = 0;
-    shieldCooldown = false;
-    const shield = document.getElementById('adShield');
-    shield.style.display = 'block';
-    shield.style.pointerEvents = 'auto';
-    document.getElementById('shieldText').textContent = `Tap ${AD_SHIELD_CLICKS}x to unlock player`;
-  }
-
-  // Auto-activate shield whenever iframe loads new content
-  document.getElementById('playerFrame').addEventListener('load', function() {
-    if (this.src && this.src !== '' && this.src !== 'about:blank') {
-      activateAdShield();
-    }
-  });
-
-  document.getElementById('adShield').addEventListener('click', (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    if (shieldCooldown) return;
-    shieldClicks++;
-    const remaining = AD_SHIELD_CLICKS - shieldClicks;
-    if (remaining <= 0) {
-      document.getElementById('adShield').style.display = 'none';
-      // Brief re-shield after 1s — catches delayed ad popups on first real interaction
-      if (isMobile) {
-        shieldCooldown = true;
-        setTimeout(() => {
-          shieldClicks = 0;
-          shieldCooldown = false;
-          // Show a smaller "quick shield" that only needs 1 tap
-          const shield = document.getElementById('adShield');
-          shield.style.display = 'block';
-          document.getElementById('shieldText').textContent = 'Tap once more — catching late ads';
-          // Auto-dismiss after 3s if user doesn't tap
-          setTimeout(() => {
-            shield.style.display = 'none';
-          }, 3000);
-        }, 800);
-      }
-    } else {
-      document.getElementById('shieldText').textContent = `Tap ${remaining} more time${remaining > 1 ? 's' : ''} to play`;
-    }
-  });
-
-  // 4. Block focus stealing (ads try to steal focus to trigger clicks)
+  // 3. Block focus stealing (ads try to steal focus to trigger clicks)
   window.addEventListener('blur', () => {
     if (!document.getElementById('playerModal').classList.contains('hidden')) {
       setTimeout(() => window.focus(), 0);
