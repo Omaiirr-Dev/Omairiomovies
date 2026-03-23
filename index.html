@@ -90,7 +90,7 @@
       <div class="relative flex gap-2 justify-center">
         <input id="lockInput" type="password" placeholder="••••"
           class="w-48 bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm text-white text-center placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-crimson/50 transition" />
-        <button onclick="window.tryUnlock()" class="bg-crimson hover:bg-crimson-dark text-white font-semibold px-5 py-3 rounded-xl text-sm transition">
+        <button onclick="var v=document.getElementById('lockInput').value.trim().toLowerCase();if(v==='oooo'){sessionStorage.setItem('omair_unlocked','1');var s=document.getElementById('lockScreen');s.style.transition='opacity 0.3s';s.style.opacity='0';setTimeout(function(){s.style.display='none'},300)}else{document.getElementById('lockError').textContent='Wrong: ['+v+']';document.getElementById('lockError').classList.remove('hidden')}" class="bg-crimson hover:bg-crimson-dark text-white font-semibold px-5 py-3 rounded-xl text-sm transition">
           <i class="fa-solid fa-arrow-right"></i>
         </button>
       </div>
